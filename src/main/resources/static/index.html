@@ -2,93 +2,214 @@
 <html lang="pl">
 <head>
     <meta charset="UTF-8">
-    <title>Online Chat - Java</title>
+    <title>Online Chat - Java + Docker</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
-    <style> /* prosty layout jak w wymaganiach */ body{margin:0;font-family:Arial;display:flex;flex-direction:column;height:100vh;}
-        .header{background:#007bff;color:white;padding:10px;text-align:center;}
-        .main{display:flex;flex:1;}
-        .sidebar{width:220px;background:#f8f9fa;padding:10px;overflow-y:auto;}
-        .chat-area{flex:1;display:flex;flex-direction:column;}
-        .messages{flex:1;padding:15px;overflow-y:auto;background:#fff;}
-        .input-area{padding:10px;background:#f8f9fa;}
+    <style>
+        * { box-sizing: border-box; }
+        body { margin:0; font-family: Arial, sans-serif; display:flex; flex-direction:column; height:100vh; }
+        .header { background:#007bff; color:white; padding:12px; text-align:center; font-size:1.2em; position:relative; }
+        .main { display:flex; flex:1; overflow:hidden; }
+        .sidebar { width:260px; background:#f8f9fa; padding:15px; overflow-y:auto; border-right:1px solid #ddd; }
+        .chat-area { flex:1; display:flex; flex-direction:column; }
+        .messages { flex:1; padding:15px; overflow-y:auto; background:#fff; }
+        .message { margin-bottom:12px; padding:8px; border-radius:8px; background:#f1f1f1; max-width:80%; }
+        .input-area { padding:12px; background:#f8f9fa; display:flex; gap:8px; align-items:center; }
+        .status-dot { display:inline-block; width:12px; height:12px; border-radius:50%; vertical-align:middle; margin-right:6px; }
+        .online { background:#28a745; }
+        .afk { background:#ffc107; }
+        .offline { background:#dc3545; }
     </style>
 </head>
 <body>
-<div class="header">Online Chat (Docker + Spring Boot)</div>
+<div class="header">
+    Online Chat 
+    <span id="my-username" style="margin-left:15px; font-weight:bold;"></span>
+    <span id="presence-dot" class="status-dot online"></span>
+    <span id="presence-text">ONLINE</span>
+</div>
+
 <div class="main">
-    <div class="sidebar" id="rooms">Pokoje...</div>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <h4>Publiczne pokoje</h4>
+        <button onclick="loadPublicRooms()" style="margin-bottom:8px;">Odśwież listę</button>
+        <div id="room-list"></div>
+        
+        <hr>
+        <input id="new-room-name" placeholder="Nazwa nowego pokoju" style="width:100%; margin-bottom:5px;">
+        <button onclick="createRoom()" style="width:100%;">Utwórz pokój</button>
+        
+        <hr>
+        <h4>Znajomi (presence)</h4>
+        <div id="friends-list"></div>
+    </div>
+
+    <!-- Czat -->
     <div class="chat-area">
-        <div id="auth-panel">
-            <h3>Logowanie</h3>
-            <input id="login-username" placeholder="username" value="testuser"><br>
-            <input id="login-password" type="password" placeholder="hasło" value="test123"><br>
-            <button onclick="login()">Zaloguj</button>
-            <button onclick="register()">Zarejestruj</button>
-        </div>
-        <div id="chat-panel" style="display:none;">
-            <div class="messages" id="messages"></div>
-            <div class="input-area">
-                <input id="message-input" placeholder="Napisz wiadomość..." style="width:70%">
-                <button onclick="sendMessage()">Wyślij</button>
-            </div>
+        <div class="messages" id="messages"></div>
+        
+        <div class="input-area">
+            <input id="message-input" placeholder="Napisz wiadomość..." style="flex:1; padding:10px;">
+            <input type="file" id="file-input" style="display:none;" onchange="uploadAndSend()">
+            <button onclick="document.getElementById('file-input').click()" title="Dodaj plik">📎</button>
+            <button onclick="sendMessage()">Wyślij</button>
         </div>
     </div>
+</div>
+
+<!-- Panel logowania (na początku) -->
+<div id="auth-panel" style="position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); color:white; display:flex; align-items:center; justify-content:center; flex-direction:column; z-index:100;">
+    <h2>Logowanie / Rejestracja</h2>
+    <input id="username" placeholder="Username" style="margin:8px; padding:10px; width:280px;" value="testuser"><br>
+    <input id="password" type="password" placeholder="Hasło" style="margin:8px; padding:10px; width:280px;" value="test123"><br>
+    <button onclick="login()" style="margin:8px; padding:10px 20px; width:280px;">Zaloguj się</button>
+    <button onclick="register()" style="margin:8px; padding:10px 20px; width:280px; background:#28a745;">Zarejestruj się</button>
 </div>
 
 <script>
     let stompClient = null;
     let token = null;
     let currentRoom = "public";
+    let username = "";
 
     function register() {
-        const username = document.getElementById('login-username').value;
-        const password = document.getElementById('login-password').value;
+        const user = document.getElementById('username').value.trim();
+        const pass = document.getElementById('password').value.trim();
         fetch('/api/auth/register', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({username, password, email: username + "@example.com"})
-        }).then(r => r.json()).then(data => { token = data.token; startChat(); });
+            body: JSON.stringify({username: user, password: pass, email: user + "@example.com"})
+        })
+        .then(r => r.json())
+        .then(data => {
+            token = data.token;
+            username = data.username;
+            startChat();
+        })
+        .catch(() => alert("Błąd rejestracji"));
     }
 
     function login() {
-        const username = document.getElementById('login-username').value;
-        const password = document.getElementById('login-password').value;
+        const user = document.getElementById('username').value.trim();
+        const pass = document.getElementById('password').value.trim();
         fetch('/api/auth/login', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({username, password})
-        }).then(r => r.json()).then(data => { token = data.token; startChat(); });
+            body: JSON.stringify({username: user, password: pass})
+        })
+        .then(r => r.json())
+        .then(data => {
+            token = data.token;
+            username = data.username;
+            startChat();
+        })
+        .catch(() => alert("Nieprawidłowe dane logowania"));
     }
 
     function startChat() {
         document.getElementById('auth-panel').style.display = 'none';
-        document.getElementById('chat-panel').style.display = 'flex';
+        document.getElementById('my-username').textContent = username;
 
         const socket = new SockJS('/ws-chat');
         stompClient = Stomp.over(socket);
-        stompClient.connect({'Authorization': 'Bearer ' + token}, function() {
-            stompClient.subscribe('/topic/' + currentRoom, onMessageReceived);
-            const joinMsg = {sender: "System", content: "Dołączył", type: 'JOIN'};
-            stompClient.send("/app/chat.addUser/" + currentRoom, {}, JSON.stringify(joinMsg));
-        });
-    }
 
-    function sendMessage() {
-        const content = document.getElementById('message-input').value;
-        if (content && stompClient) {
-            const msg = {content, type: 'CHAT'};
-            stompClient.send("/app/chat.sendMessage/" + currentRoom, {}, JSON.stringify(msg));
-            document.getElementById('message-input').value = '';
-        }
+        stompClient.connect({'Authorization': 'Bearer ' + token}, function() {
+            // subskrypcja bieżącego pokoju
+            stompClient.subscribe('/topic/' + currentRoom, onMessageReceived);
+            
+            // presence
+            stompClient.subscribe('/topic/presence', onPresenceReceived);
+            
+            // ping co 20 sekund (żeby nie wpaść w AFK)
+            setInterval(() => {
+                if (stompClient) stompClient.send("/app/presence.ping", {}, JSON.stringify({}));
+            }, 20000);
+
+            loadPublicRooms();
+        });
     }
 
     function onMessageReceived(payload) {
         const msg = JSON.parse(payload.body);
         const div = document.createElement('div');
-        div.textContent = `${msg.sender}: ${msg.content}`;
+        div.className = 'message';
+        div.innerHTML = `<strong>${msg.sender}:</strong> ${msg.content || ''}`;
+        if (msg.attachmentUrl) {
+            div.innerHTML += `<br><a href="${msg.attachmentUrl}" target="_blank">📎 Plik</a>`;
+        }
         document.getElementById('messages').appendChild(div);
+        document.getElementById('messages').scrollTop = 999999;
     }
+
+    function onPresenceReceived(payload) {
+        console.log("Presence update:", payload.body);
+        // tutaj możesz rozbudować listę znajomych
+    }
+
+    function sendMessage() {
+        const content = document.getElementById('message-input').value.trim();
+        if (!content || !stompClient) return;
+        const msg = {content: content, type: 'CHAT'};
+        stompClient.send("/app/chat.sendMessage/" + currentRoom, {}, JSON.stringify(msg));
+        document.getElementById('message-input').value = '';
+    }
+
+    function uploadAndSend() {
+        const file = document.getElementById('file-input').files[0];
+        if (!file) return;
+        const formData = new FormData();
+        formData.append('file', file);
+        fetch('/api/attachments', {
+            method: 'POST',
+            body: formData
+        })
+        .then(r => r.json())
+        .then(data => {
+            const msg = {
+                content: "Wysłał plik: " + data.filename,
+                attachmentUrl: data.url,
+                type: 'CHAT'
+            };
+            stompClient.send("/app/chat.sendMessage/" + currentRoom, {}, JSON.stringify(msg));
+        })
+        .catch(() => alert("Błąd uploadu"));
+    }
+
+    function loadPublicRooms() {
+        fetch('/api/rooms/public')
+            .then(r => r.json())
+            .then(rooms => {
+                const list = document.getElementById('room-list');
+                list.innerHTML = rooms.map(r => 
+                    `<div onclick="joinRoom('${r.name}')" style="cursor:pointer; padding:6px;">${r.name} (${r.type})</div>`
+                ).join('');
+            });
+    }
+
+    function createRoom() {
+        const name = document.getElementById('new-room-name').value.trim();
+        if (!name) return;
+        fetch('/api/rooms', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name: name, description: "", type: "PUBLIC"})
+        })
+        .then(() => loadPublicRooms());
+    }
+
+    function joinRoom(roomName) {
+        currentRoom = roomName;
+        document.getElementById('messages').innerHTML = `<div style="color:#666;">Dołączyłeś do pokoju: ${roomName}</div>`;
+        if (stompClient) {
+            stompClient.subscribe('/topic/' + roomName, onMessageReceived);
+            const joinMsg = {content: "Dołączył do pokoju", type: 'JOIN'};
+            stompClient.send("/app/chat.join/" + roomName, {}, JSON.stringify(joinMsg));
+        }
+    }
+
+    // Start
+    console.log("%cChat gotowy – zaloguj się", "color:#007bff; font-weight:bold");
 </script>
 </body>
 </html>
