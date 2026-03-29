@@ -10,6 +10,9 @@ import java.util.List;
 
 @Entity
 @Table(name = "users")
+@Enumerated(EnumType.STRING)
+    private PresenceStatus presenceStatus = PresenceStatus.OFFLINE;
+    private LocalDateTime lastActivity = LocalDateTime.now();
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor
 public class User implements UserDetails {
 
