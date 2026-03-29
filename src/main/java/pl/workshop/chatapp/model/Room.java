@@ -21,11 +21,17 @@ public class Room {
     private String description;
 
     @Enumerated(EnumType.STRING)
-    private RoomType type; // PUBLIC lub PRIVATE
+    private RoomType type = RoomType.PUBLIC;
 
     @ManyToOne
-    @JoinColumn(name = "owner_id")
+    @JoinColumn(name = "owner_id", nullable = false)
     private User owner;
+
+    @ManyToMany
+    @JoinTable(name = "room_admins",
+               joinColumns = @JoinColumn(name = "room_id"),
+               inverseJoinColumns = @JoinColumn(name = "user_id"))
+    private Set<User> admins = new HashSet<>();
 
     @ManyToMany
     @JoinTable(name = "room_members",
@@ -38,12 +44,6 @@ public class Room {
                joinColumns = @JoinColumn(name = "room_id"),
                inverseJoinColumns = @JoinColumn(name = "user_id"))
     private Set<User> bannedUsers = new HashSet<>();
-
-    @ManyToMany
-    @JoinTable(name = "room_admins",
-               joinColumns = @JoinColumn(name = "room_id"),
-               inverseJoinColumns = @JoinColumn(name = "user_id"))
-    private Set<User> admins = new HashSet<>();
 }
 
 public enum RoomType {
