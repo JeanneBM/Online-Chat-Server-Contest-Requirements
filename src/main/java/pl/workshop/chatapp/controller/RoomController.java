@@ -33,8 +33,16 @@ public class RoomController {
     }
 
     @PostMapping
-    public ResponseEntity<Room> createRoom(@RequestBody Room roomReq, Principal principal) {
+    public ResponseEntity<?> createRoom(@RequestBody Room roomReq, Principal principal) {
         User owner = userRepository.findByUsername(principal.getName()).orElseThrow();
+
+        if (roomReq.getName() == null || roomReq.getName().isBlank()) {
+            return ResponseEntity.badRequest().body("Nazwa pokoju jest wymagana");
+        }
+
+        if (roomRepository.existsByName(roomReq.getName())) {
+            return ResponseEntity.badRequest().body("Pokój o tej nazwie już istnieje");
+        }
 
         Room room = new Room();
         room.setName(roomReq.getName());
@@ -48,43 +56,51 @@ public class RoomController {
         return ResponseEntity.ok(saved);
     }
 
-    // === KATALOG PUBLICZNYCH POKOI + SEARCH ===
     @GetMapping("/public")
-    public List<Room> getPublicRooms(@RequestParam(required = false) String search) {
+    public ResponseEntity<List<Room>> getPublicRooms(@RequestParam(required = false) String search) {
+        List<Room> rooms;
+
         if (search == null || search.isBlank()) {
-            return roomRepository.findByType(RoomType.PUBLIC);
+            rooms = roomRepository.findByType(RoomType.PUBLIC);
+        } else {
+            rooms = roomService.getPublicRooms(search);
         }
-        return roomService.getPublicRooms(search);
+
+        return ResponseEntity.ok(rooms);
     }
 
-    // === MODERACJA ===
     @DeleteMapping("/{roomId}/message/{messageId}")
     public ResponseEntity<?> deleteMessage(@PathVariable Long roomId,
                                            @PathVariable Long messageId,
                                            Principal principal) {
-        // tutaj można później dodać właściwą logikę sprawdzania admina/owner'a
-        return ResponseEntity.ok("Message deleted (backend ready)");
+        return ResponseEntity.ok("Message deletion endpoint prepared");
     }
 
     @PostMapping("/{roomId}/ban")
     public ResponseEntity<?> banUserFromRoom(@PathVariable Long roomId,
                                              @RequestBody String username,
                                              Principal principal) {
-        // tutaj można później dodać właściwą logikę banowania
-        return ResponseEntity.ok("User banned from room");
+        if (username == null || username.isBlank()) {
+            return ResponseEntity.badRequest().body("Username jest wymagany");
+        }
+
+        return ResponseEntity.ok("User ban endpoint prepared");
     }
 
-    // === ZAPROSZENIA DO PRYWATNYCH POKOI ===
     @PostMapping("/{roomId}/invite")
     public ResponseEntity<?> inviteToRoom(@PathVariable Long roomId,
                                           @RequestParam String username,
                                           Principal principal) {
-        Long inviterId = Long.valueOf(principal.getName());
-        invitationService.inviteToRoom(roomId, inviterId, username);
+        if (username == null || username.isBlank()) {
+            return ResponseEntity.badRequest().body("Username jest wymagany");
+        }
+
+        User inviter = userRepository.findByUsername(principal.getName()).orElseThrow();
+        invitationService.inviteToRoom(roomId, inviter.getId(), username);
+
         return ResponseEntity.ok("Zaproszenie wysłane");
     }
 
-    // === MODERACJA I USUWANIE ===
     @DeleteMapping("/{roomId}")
     public ResponseEntity<?> deleteRoom(@PathVariable Long roomId, Principal principal) {
         Room room = roomRepository.findById(roomId).orElseThrow();
@@ -95,18 +111,5 @@ public class RoomController {
 
         roomRepository.delete(room);
         return ResponseEntity.ok("Pokój i wszystkie pliki usunięte");
-    }
-
-    // Delete account (2.1.5)
-    @DeleteMapping("/account")
-    public ResponseEntity<?> deleteAccount(Principal principal) {
-        User user = userRepository.findByUsername(principal.getName()).orElseThrow();
-
-        roomRepository.findAll().stream()
-                .filter(r -> r.getOwner().equals(user))
-                .forEach(roomRepository::delete);
-
-        userRepository.delete(user);
-        return ResponseEntity.ok("Konto usunięte");
     }
 }
