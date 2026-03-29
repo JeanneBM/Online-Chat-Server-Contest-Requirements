@@ -32,7 +32,7 @@ public class ChatController {
     }
 
     /**
-     * Wysyłanie wiadomości (tekst lub z załącznikiem)
+     * Wysyłanie wiadomości do pokoju (tekst + załącznik)
      */
     @MessageMapping("/chat.sendMessage/{roomId}")
     @SendTo("/topic/{roomId}")
@@ -42,14 +42,13 @@ public class ChatController {
 
         String username = headerAccessor.getUser().getName();
 
-        // Pobieramy użytkownika i pokój
         User sender = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         Room room = roomRepository.findByName(roomId)
                 .orElseThrow(() -> new RuntimeException("Room not found"));
 
-        // Zapisujemy wiadomość do bazy (encja Message)
+        // Zapis do bazy danych
         Message dbMessage = new Message();
         dbMessage.setRoom(room);
         dbMessage.setSender(sender);
@@ -58,7 +57,7 @@ public class ChatController {
         dbMessage.setTimestamp(LocalDateTime.now());
         messageRepository.save(dbMessage);
 
-        // Przygotowujemy odpowiedź dla klientów WebSocket
+        // Zwrot do wszystkich w pokoju
         chatMessage.setSender(username);
         chatMessage.setTimestamp(LocalDateTime.now());
         chatMessage.setRoomId(roomId);
@@ -67,7 +66,7 @@ public class ChatController {
     }
 
     /**
-     * Dołączanie do pokoju (JOIN)
+     * Dołączanie użytkownika do pokoju (JOIN)
      */
     @MessageMapping("/chat.join/{roomId}")
     @SendTo("/topic/{roomId}")
@@ -84,5 +83,26 @@ public class ChatController {
         joinMessage.setTimestamp(LocalDateTime.now());
 
         return joinMessage;
+    }
+
+    /**
+     * Usuwanie wiadomości przez administratora / ownera (moderacja)
+     */
+    @MessageMapping("/chat.deleteMessage/{roomId}")
+    @SendTo("/topic/{roomId}")
+    public ChatMessage deleteMessage(@DestinationVariable String roomId,
+                                     @Payload ChatMessage chatMessage,
+                                     SimpMessageHeaderAccessor headerAccessor) {
+
+        String username = headerAccessor.getUser().getName();
+
+        ChatMessage deleteMsg = new ChatMessage();
+        deleteMsg.setType(ChatMessage.MessageType.CHAT);
+        deleteMsg.setSender(username);
+        deleteMsg.setContent("Wiadomość została usunięta przez administratora");
+        deleteMsg.setRoomId(roomId);
+        deleteMsg.setTimestamp(LocalDateTime.now());
+
+        return deleteMsg;
     }
 }
