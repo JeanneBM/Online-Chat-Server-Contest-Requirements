@@ -1,7 +1,7 @@
-package com.example.chatserver.service;
+package pl.workshop.chatapp.service;
 
-import com.example.chatserver.model.*;
-import com.example.chatserver.repository.*;
+import pl.workshop.chatapp.model.*;
+import pl.workshop.chatapp.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
