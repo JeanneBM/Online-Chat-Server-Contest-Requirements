@@ -34,10 +34,12 @@ public class User implements UserDetails {
 
     private boolean enabled = true;
 
+    @Enumerated(EnumType.STRING)
     private PresenceStatus presenceStatus = PresenceStatus.OFFLINE;
+
     private LocalDateTime lastActivity = LocalDateTime.now();
 
-    // ==================== NOWE RELACJE ====================
+    // ==================== RELACJE FRIENDS + BANS + SESSIONS ====================
     @ManyToMany
     @JoinTable(
             name = "user_friends",
@@ -46,14 +48,14 @@ public class User implements UserDetails {
     )
     private Set<User> friends = new HashSet<>();
 
-    @OneToMany(mappedBy = "sender", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<FriendRequest> sentRequests = new HashSet<>();
-
-    @OneToMany(mappedBy = "receiver", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<FriendRequest> receivedRequests = new HashSet<>();
-
     @OneToMany(mappedBy = "banner", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<UserBan> bans = new HashSet<>();   // kogo ja zbanowałem
+    private Set<UserBan> bans = new HashSet<>();
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<UserSession> sessions = new HashSet<>();
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<PasswordResetToken> resetTokens = new HashSet<>();
 
     // ==================== METODY POMOCNICZE ====================
     public boolean isFriend(User other) {
