@@ -11,7 +11,10 @@ public class ChatController {
 
     @MessageMapping("/chat.sendMessage/{roomId}")
     @SendTo("/topic/{roomId}")
-    public ChatMessage sendMessage(@Payload ChatMessage chatMessage) {
+    public ChatMessage sendMessage(@DestinationVariable String roomId, @Payload ChatMessage chatMessage, 
+                               org.springframework.messaging.simp.SimpMessageHeaderAccessor headerAccessor) {
+        String username = headerAccessor.getUser().getName();
+        chatMessage.setSender(username);
         return chatMessage;
     }
 
@@ -21,4 +24,6 @@ public class ChatController {
         chatMessage.setType(ChatMessage.MessageType.JOIN);
         return chatMessage;
     }
+
+}
 }
