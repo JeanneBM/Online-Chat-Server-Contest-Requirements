@@ -1,7 +1,7 @@
-package com.example.chatserver.repository;
+package pl.workshop.chatapp.repository;
 
-import com.example.chatserver.model.UserBan;
-import com.example.chatserver.model.User;
+import pl.workshop.chatapp.model.UserBan;
+import pl.workshop.chatapp.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface UserBanRepository extends JpaRepository<UserBan, Long> {
