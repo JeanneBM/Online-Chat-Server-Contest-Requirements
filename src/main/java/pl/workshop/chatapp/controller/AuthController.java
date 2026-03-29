@@ -36,8 +36,18 @@ public class AuthController {
         String username = request.get("username");
         String password = request.get("password");
 
-        if (userRepository.existsByEmail(email) || userRepository.existsByUsername(username)) {
-            return ResponseEntity.badRequest().body("Email lub username już istnieje");
+        if (email == null || email.isBlank()
+                || username == null || username.isBlank()
+                || password == null || password.isBlank()) {
+            return ResponseEntity.badRequest().body("Email, username i password są wymagane");
+        }
+
+        if (userRepository.existsByEmail(email)) {
+            return ResponseEntity.badRequest().body("Email już istnieje");
+        }
+
+        if (userRepository.existsByUsername(username)) {
+            return ResponseEntity.badRequest().body("Username już istnieje");
         }
 
         User user = new User();
@@ -46,45 +56,74 @@ public class AuthController {
         user.setPassword(passwordEncoder.encode(password));
 
         userRepository.save(user);
-        String token = jwtService.generateToken(username);
 
-        return ResponseEntity.ok(Map.of("token", token, "username", username));
+        String token = jwtService.generateToken(username);
+        return ResponseEntity.ok(Map.of(
+                "token", token,
+                "username", username,
+                "email", email
+        ));
     }
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> request) {
-        String username = request.get("username");
+        String email = request.get("email");
         String password = request.get("password");
 
-        User user = userRepository.findByUsername(username).orElse(null);
+        if (email == null || email.isBlank() || password == null || password.isBlank()) {
+            return ResponseEntity.badRequest().body("Email i password są wymagane");
+        }
+
+        User user = userRepository.findByEmail(email).orElse(null);
         if (user == null || !passwordEncoder.matches(password, user.getPassword())) {
             return ResponseEntity.badRequest().body("Nieprawidłowe dane");
         }
 
-        String token = jwtService.generateToken(username);
-        return ResponseEntity.ok(Map.of("token", token, "username", username));
+        String token = jwtService.generateToken(user.getUsername());
+        return ResponseEntity.ok(Map.of(
+                "token", token,
+                "username", user.getUsername(),
+                "email", user.getEmail()
+        ));
     }
 
-    // === PASSWORD MANAGEMENT ===
     @PostMapping("/change-password")
     public ResponseEntity<?> changePassword(@RequestBody Map<String, String> request, Principal principal) {
-        Long userId = Long.valueOf(principal.getName()); // zakładamy że principal.getName() = userId
+        String username = principal.getName();
         String oldPassword = request.get("oldPassword");
         String newPassword = request.get("newPassword");
-        passwordService.changePassword(userId, oldPassword, newPassword);
+
+        if (oldPassword == null || oldPassword.isBlank()
+                || newPassword == null || newPassword.isBlank()) {
+            return ResponseEntity.badRequest().body("oldPassword i newPassword są wymagane");
+        }
+
+        User user = userRepository.findByUsername(username).orElseThrow();
+        passwordService.changePassword(user.getId(), oldPassword, newPassword);
+
         return ResponseEntity.ok("Hasło zmienione pomyślnie");
     }
 
     @PostMapping("/reset-token")
     public ResponseEntity<?> createResetToken(@RequestParam String email) {
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.badRequest().body("Email jest wymagany");
+        }
+
         String token = passwordService.createResetToken(email);
-        return ResponseEntity.ok(Map.of("token", token)); // w produkcji wyślij mailem
+        return ResponseEntity.ok(Map.of("token", token));
     }
 
     @PostMapping("/reset-password")
     public ResponseEntity<?> resetPassword(@RequestBody Map<String, String> request) {
         String token = request.get("token");
         String newPassword = request.get("newPassword");
+
+        if (token == null || token.isBlank()
+                || newPassword == null || newPassword.isBlank()) {
+            return ResponseEntity.badRequest().body("Token i newPassword są wymagane");
+        }
+
         passwordService.resetPassword(token, newPassword);
         return ResponseEntity.ok("Hasło zresetowane pomyślnie");
     }
