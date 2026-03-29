@@ -1,7 +1,7 @@
-package com.example.chatserver.repository;
+package pl.workshop.chatapp.repository;
 
-import com.example.chatserver.model.FriendRequest;
-import com.example.chatserver.model.User;
+import pl.workshop.chatapp.model.FriendRequest;
+import pl.workshop.chatapp.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
