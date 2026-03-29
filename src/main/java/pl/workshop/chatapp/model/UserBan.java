@@ -1,4 +1,4 @@
-package com.example.chatserver.model;
+package pl.workshop.chatapp.model;
 
 import jakarta.persistence.*;
 import lombok.*;
