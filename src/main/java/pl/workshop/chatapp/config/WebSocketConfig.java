@@ -15,7 +15,12 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         config.enableSimpleBroker("/topic");           // pokoje publiczne/prywatne
         config.setApplicationDestinationPrefixes("/app");
     }
-
+    
+    @Override
+    public void configureClientInboundChannel(org.springframework.messaging.support.ChannelRegistration registration) {
+        registration.interceptors(new WebSocketJwtInterceptor(jwtService));
+    }
+    
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws-chat")
