@@ -36,7 +36,7 @@ public class RoomController {
 
     @PostMapping
     public ResponseEntity<?> createRoom(@RequestBody Room roomReq, Principal principal) {
-        User owner = userRepository.findByUsername(principal.getName()).orElseThrow();
+        User owner = userRepository.findByEmail(principal.getName()).orElseThrow();
 
         if (roomReq.getName() == null || roomReq.getName().isBlank()) {
             return ResponseEntity.badRequest().body("Nazwa pokoju jest wymagana");
