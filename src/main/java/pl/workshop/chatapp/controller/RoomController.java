@@ -3,6 +3,7 @@ package pl.workshop.chatapp.controller;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import pl.workshop.chatapp.model.Room;
+import pl.workshop.chatapp.model.RoomBan;
 import pl.workshop.chatapp.model.RoomInvitation;
 import pl.workshop.chatapp.model.RoomType;
 import pl.workshop.chatapp.model.User;
@@ -113,6 +114,11 @@ public class RoomController {
     @GetMapping("/{roomId}/bans")
     public ResponseEntity<Set<User>> getBannedUsers(@PathVariable Long roomId, Principal principal) {
         return ResponseEntity.ok(roomService.getBannedUsers(roomId, principal.getName()));
+    }
+
+    @GetMapping("/{roomId}/ban-details")
+    public ResponseEntity<List<RoomBan>> getBanDetails(@PathVariable Long roomId, Principal principal) {
+        return ResponseEntity.ok(roomService.getRoomBanDetails(roomId, principal.getName()));
     }
 
     @DeleteMapping("/{roomId}/ban")
