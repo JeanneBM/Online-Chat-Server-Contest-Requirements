@@ -4,6 +4,7 @@ import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.annotation.SendTo;
 import org.springframework.stereotype.Controller;
 import pl.workshop.chatapp.model.ChatMessage;
@@ -21,13 +22,16 @@ public class ChatController {
     private final MessageService messageService;
     private final FriendService friendService;
     private final UserRepository userRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     public ChatController(MessageService messageService,
                           FriendService friendService,
-                          UserRepository userRepository) {
+                          UserRepository userRepository,
+                          SimpMessagingTemplate messagingTemplate) {
         this.messageService = messageService;
         this.friendService = friendService;
         this.userRepository = userRepository;
+        this.messagingTemplate = messagingTemplate;
     }
 
     @MessageMapping("/chat.sendMessage/{roomId}")
@@ -39,20 +43,21 @@ public class ChatController {
     }
 
     @MessageMapping("/chat.sendPrivateMessage/{receiverUsername}")
-    @SendTo("/user/{receiverUsername}/queue/private")
-    public ChatMessage sendPrivateMessage(@DestinationVariable String receiverUsername,
-                                          @Payload ChatMessage chatMessage,
-                                          SimpMessageHeaderAccessor headerAccessor) {
+    public void sendPrivateMessage(@DestinationVariable String receiverUsername,
+                                   @Payload ChatMessage chatMessage,
+                                   SimpMessageHeaderAccessor headerAccessor) {
         String senderEmail = extractAuthenticatedEmail(headerAccessor);
 
         User sender = userRepository.findByEmail(senderEmail).orElseThrow();
-        User receiver = userRepository.findByUsername(receiverUsername).orElseThrow();
+        User receiver = userRepository.findByUsername(receiverUsername.trim()).orElseThrow();
 
         if (!friendService.canSendPersonalMessage(sender, receiver)) {
             throw new IllegalStateException("Nie możesz wysłać wiadomości do tego użytkownika (brak przyjaźni lub ban)");
         }
 
-        return messageService.sendPrivateMessage(sender, receiver, chatMessage);
+        ChatMessage response = messageService.sendPrivateMessage(sender, receiver, chatMessage);
+        messagingTemplate.convertAndSendToUser(receiver.getEmail(), "/queue/private", response);
+        messagingTemplate.convertAndSendToUser(sender.getEmail(), "/queue/private", response);
     }
 
     @MessageMapping("/chat.join/{roomId}")
@@ -65,7 +70,7 @@ public class ChatController {
 
         chatMessage.setType(MessageType.JOIN);
         chatMessage.setRoomId(roomId);
-        chatMessage.setSender(sender.getUsername());
+        chatMessage.setSender(resolveBusinessUsername(sender));
         chatMessage.setTimestamp(LocalDateTime.now());
 
         return chatMessage;
@@ -81,7 +86,7 @@ public class ChatController {
 
         chatMessage.setType(MessageType.DELETE);
         chatMessage.setRoomId(roomId);
-        chatMessage.setSender(sender.getUsername());
+        chatMessage.setSender(resolveBusinessUsername(sender));
         chatMessage.setTimestamp(LocalDateTime.now());
 
         return chatMessage;
@@ -93,5 +98,17 @@ public class ChatController {
         }
 
         return headerAccessor.getUser().getName().trim().toLowerCase();
+    }
+
+    private String resolveBusinessUsername(User user) {
+        if (user.getUsername() != null
+                && !user.getUsername().isBlank()
+                && !user.getUsername().equalsIgnoreCase(user.getEmail())) {
+            return user.getUsername();
+        }
+
+        return userRepository.findById(user.getId())
+                .map(User::getUsername)
+                .orElse(user.getEmail());
     }
 }
