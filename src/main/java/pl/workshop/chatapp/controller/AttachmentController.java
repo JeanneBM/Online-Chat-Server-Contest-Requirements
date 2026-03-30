@@ -15,7 +15,7 @@ import java.util.UUID;
 @RequestMapping("/api/attachments")
 public class AttachmentController {
 
-    private static final String UPLOAD_DIR = "/app/uploads/";
+    private static final Path UPLOAD_DIR = Paths.get("./uploads").toAbsolutePath().normalize();
     private static final long MAX_FILE_SIZE = 20 * 1024 * 1024;
     private static final long MAX_IMAGE_SIZE = 3 * 1024 * 1024;
 
@@ -35,15 +35,17 @@ public class AttachmentController {
                     : "Plik za duży (max 20 MB)");
         }
 
-        String filename = UUID.randomUUID() + "_" + file.getOriginalFilename();
-        Path path = Paths.get(UPLOAD_DIR + filename);
-        Files.createDirectories(path.getParent());
+        String originalFilename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "file";
+        String filename = UUID.randomUUID() + "_" + Paths.get(originalFilename).getFileName();
+        Path path = UPLOAD_DIR.resolve(filename).normalize();
+
+        Files.createDirectories(UPLOAD_DIR);
         file.transferTo(path);
 
         String url = "/uploads/" + filename;
         return ResponseEntity.ok(Map.of(
                 "url", url,
-                "filename", file.getOriginalFilename(),
+                "filename", originalFilename,
                 "contentType", contentType,
                 "size", file.getSize()
         ));
