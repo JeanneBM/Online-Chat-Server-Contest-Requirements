@@ -12,4 +12,6 @@ public interface RoomInvitationRepository extends JpaRepository<RoomInvitation, 
     List<RoomInvitation> findByInviteeAndAcceptedFalse(User invitee);
     Optional<RoomInvitation> findByIdAndInvitee(Long id, User invitee);
     boolean existsByRoomAndInviteeAndAcceptedFalse(Room room, User invitee);
+    Optional<RoomInvitation> findByRoomAndInviteeAndAcceptedFalseAndRejectedFalse(Room room, User invitee);
+    List<RoomInvitation> findByInviteeAndAcceptedFalseAndRejectedFalseOrderByCreatedAtDesc(User invitee);
 }
