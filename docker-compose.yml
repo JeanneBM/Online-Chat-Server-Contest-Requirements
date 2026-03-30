@@ -1,16 +1,17 @@
 services:
   postgres:
     image: postgres:16-alpine
+    container_name: chat-postgres
     environment:
-      POSTGRES_DB: chatdb
-      POSTGRES_USER: chatuser
+      POSTGRES_DB: ${POSTGRES_DB:-chatdb}
+      POSTGRES_USER: ${POSTGRES_USER:-chatuser}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chatpass123}
     ports:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U chatuser -d chatdb"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-chatuser} -d ${POSTGRES_DB:-chatdb}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -19,17 +20,19 @@ services:
 
   chat-app:
     build: .
-    ports:
-      - "8080:8080"
+    container_name: chat-app
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/chatdb
-      SPRING_DATASOURCE_USERNAME: chatuser
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-chatdb}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-chatuser}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-chatpass123}
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       JWT_SECRET: ${JWT_SECRET:-super-secret-key-change-in-production-2026}
+      SERVER_PORT: 8080
+    ports:
+      - "8080:8080"
     volumes:
       - ./uploads:/app/uploads
     restart: unless-stopped
