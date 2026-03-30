@@ -43,8 +43,9 @@ public class ChatController {
     public ChatMessage sendPrivateMessage(@DestinationVariable String receiverUsername,
                                           @Payload ChatMessage chatMessage,
                                           SimpMessageHeaderAccessor headerAccessor) {
-        String senderUsername = headerAccessor.getUser().getName();
-        User sender = userRepository.findByUsername(senderUsername).orElseThrow();
+        String senderEmail = extractAuthenticatedEmail(headerAccessor);
+
+        User sender = userRepository.findByEmail(senderEmail).orElseThrow();
         User receiver = userRepository.findByUsername(receiverUsername).orElseThrow();
 
         if (!friendService.canSendPersonalMessage(sender, receiver)) {
@@ -59,10 +60,14 @@ public class ChatController {
     public ChatMessage joinRoom(@DestinationVariable String roomId,
                                 @Payload ChatMessage chatMessage,
                                 SimpMessageHeaderAccessor headerAccessor) {
+        String senderEmail = extractAuthenticatedEmail(headerAccessor);
+        User sender = userRepository.findByEmail(senderEmail).orElseThrow();
+
         chatMessage.setType(MessageType.JOIN);
         chatMessage.setRoomId(roomId);
-        chatMessage.setSender(headerAccessor.getUser().getName());
+        chatMessage.setSender(sender.getUsername());
         chatMessage.setTimestamp(LocalDateTime.now());
+
         return chatMessage;
     }
 
@@ -71,10 +76,22 @@ public class ChatController {
     public ChatMessage deleteMessage(@DestinationVariable String roomId,
                                      @Payload ChatMessage chatMessage,
                                      SimpMessageHeaderAccessor headerAccessor) {
+        String senderEmail = extractAuthenticatedEmail(headerAccessor);
+        User sender = userRepository.findByEmail(senderEmail).orElseThrow();
+
         chatMessage.setType(MessageType.DELETE);
         chatMessage.setRoomId(roomId);
-        chatMessage.setSender(headerAccessor.getUser().getName());
+        chatMessage.setSender(sender.getUsername());
         chatMessage.setTimestamp(LocalDateTime.now());
+
         return chatMessage;
+    }
+
+    private String extractAuthenticatedEmail(SimpMessageHeaderAccessor headerAccessor) {
+        if (headerAccessor == null || headerAccessor.getUser() == null || headerAccessor.getUser().getName() == null) {
+            throw new IllegalStateException("Brak uwierzytelnionego użytkownika");
+        }
+
+        return headerAccessor.getUser().getName().trim().toLowerCase();
     }
 }
