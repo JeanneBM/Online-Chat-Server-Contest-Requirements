@@ -27,7 +27,7 @@ public class UserController {
 
     @DeleteMapping("/delete")
     public ResponseEntity<?> deleteAccount(Principal principal) {
-        User user = userRepository.findByUsername(principal.getName()).orElseThrow();
+        User user = userRepository.findByEmail(principal.getName()).orElseThrow();
         userService.deleteAccount(user.getId());
         return ResponseEntity.ok("Konto usunięte");
     }
