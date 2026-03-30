@@ -29,12 +29,12 @@ public class WebSocketJwtInterceptor implements ChannelInterceptor {
             if (authHeader != null && authHeader.startsWith("Bearer ")) {
                 String token = authHeader.substring(7);
                 try {
-                    String username = jwtService.extractUsername(token);
+                    String email = jwtService.extractEmail(token);
                     String sessionId = jwtService.extractSessionId(token);
-                    if (jwtService.isTokenValid(token, username)
+                    if (jwtService.isTokenValid(token, email)
                             && sessionId != null
-                            && sessionService.isSessionActive(username, sessionId)) {
-                        accessor.setUser(new UsernamePasswordAuthenticationToken(username, null));
+                            && sessionService.isSessionActive(email, sessionId)) {
+                        accessor.setUser(new UsernamePasswordAuthenticationToken(email, null));
                     }
                 } catch (Exception ignored) {
                 }
