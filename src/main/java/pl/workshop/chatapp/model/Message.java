@@ -34,4 +34,6 @@ public class Message {
     private LocalDateTime timestamp = LocalDateTime.now();
 
     private Long replyToId;
+
+    private LocalDateTime readAt;
 }

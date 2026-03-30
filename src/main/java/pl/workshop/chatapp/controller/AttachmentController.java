@@ -16,14 +16,23 @@ import java.util.UUID;
 public class AttachmentController {
 
     private static final String UPLOAD_DIR = "/app/uploads/";
+    private static final long MAX_FILE_SIZE = 20 * 1024 * 1024;
+    private static final long MAX_IMAGE_SIZE = 3 * 1024 * 1024;
 
     @PostMapping
     public ResponseEntity<?> upload(@RequestParam("file") MultipartFile file) throws IOException {
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body("Plik jest pusty");
         }
-        if (file.getSize() > 20 * 1024 * 1024) { // 20 MB
-            return ResponseEntity.badRequest().body("Plik za duży (max 20 MB)");
+
+        String contentType = file.getContentType() != null ? file.getContentType() : "";
+        boolean image = contentType.startsWith("image/");
+        long maxAllowed = image ? MAX_IMAGE_SIZE : MAX_FILE_SIZE;
+
+        if (file.getSize() > maxAllowed) {
+            return ResponseEntity.badRequest().body(image
+                    ? "Obraz za duży (max 3 MB)"
+                    : "Plik za duży (max 20 MB)");
         }
 
         String filename = UUID.randomUUID() + "_" + file.getOriginalFilename();
@@ -32,6 +41,11 @@ public class AttachmentController {
         file.transferTo(path);
 
         String url = "/uploads/" + filename;
-        return ResponseEntity.ok(Map.of("url", url, "filename", file.getOriginalFilename()));
+        return ResponseEntity.ok(Map.of(
+                "url", url,
+                "filename", file.getOriginalFilename(),
+                "contentType", contentType,
+                "size", file.getSize()
+        ));
     }
 }
