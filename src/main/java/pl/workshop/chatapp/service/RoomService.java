@@ -5,9 +5,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pl.workshop.chatapp.model.Message;
 import pl.workshop.chatapp.model.Room;
+import pl.workshop.chatapp.model.RoomBan;
 import pl.workshop.chatapp.model.RoomType;
 import pl.workshop.chatapp.model.User;
 import pl.workshop.chatapp.repository.MessageRepository;
+import pl.workshop.chatapp.repository.RoomBanRepository;
 import pl.workshop.chatapp.repository.RoomRepository;
 import pl.workshop.chatapp.repository.UserRepository;
 
@@ -24,6 +26,7 @@ public class RoomService {
     private final UserRepository userRepository;
     private final MessageRepository messageRepository;
     private final FileService fileService;
+    private final RoomBanRepository roomBanRepository;
 
     public List<Room> getPublicRooms(String search) {
         List<Room> publicRooms = roomRepository.findByType(RoomType.PUBLIC);
@@ -118,6 +121,19 @@ public class RoomService {
         room.getAdmins().remove(targetUser);
         room.getBannedUsers().add(targetUser);
 
+        roomBanRepository.findByRoomAndBannedUser(room, targetUser)
+                .ifPresentOrElse(existing -> {
+                    existing.setBannedByUser(actingUser);
+                    existing.setBannedAt(LocalDateTime.now());
+                }, () -> {
+                    RoomBan roomBan = new RoomBan();
+                    roomBan.setRoom(room);
+                    roomBan.setBannedUser(targetUser);
+                    roomBan.setBannedByUser(actingUser);
+                    roomBan.setBannedAt(LocalDateTime.now());
+                    roomBanRepository.save(roomBan);
+                });
+
         return roomRepository.save(room);
     }
 
@@ -138,6 +154,19 @@ public class RoomService {
         room.getAdmins().remove(targetUser);
         room.getBannedUsers().add(targetUser);
 
+        roomBanRepository.findByRoomAndBannedUser(room, targetUser)
+                .ifPresentOrElse(existing -> {
+                    existing.setBannedByUser(actingUser);
+                    existing.setBannedAt(LocalDateTime.now());
+                }, () -> {
+                    RoomBan roomBan = new RoomBan();
+                    roomBan.setRoom(room);
+                    roomBan.setBannedUser(targetUser);
+                    roomBan.setBannedByUser(actingUser);
+                    roomBan.setBannedAt(LocalDateTime.now());
+                    roomBanRepository.save(roomBan);
+                });
+
         return roomRepository.save(room);
     }
 
@@ -151,9 +180,11 @@ public class RoomService {
         }
 
         room.getBannedUsers().remove(targetUser);
+        roomBanRepository.deleteByRoomAndBannedUser(room, targetUser);
         return roomRepository.save(room);
     }
 
+    @Transactional(readOnly = true)
     public Set<User> getBannedUsers(Long roomId, String actingEmail) {
         Room room = roomRepository.findById(roomId).orElseThrow();
         User actingUser = findUserByEmail(actingEmail);
@@ -165,15 +196,28 @@ public class RoomService {
         return room.getBannedUsers();
     }
 
+    @Transactional(readOnly = true)
+    public List<RoomBan> getRoomBanDetails(Long roomId, String actingEmail) {
+        Room room = roomRepository.findById(roomId).orElseThrow();
+        User actingUser = findUserByEmail(actingEmail);
+
+        if (!isAdminOrOwner(room, actingUser)) {
+            throw new SecurityException("Tylko owner lub admin może zobaczyć szczegóły banów");
+        }
+
+        return roomBanRepository.findByRoomOrderByBannedAtDesc(room);
+    }
+
     public void markRoomMessagesRead(Long roomId, String email) {
         Room room = roomRepository.findById(roomId).orElseThrow();
         User user = findUserByEmail(email);
 
         List<Message> messages = messageRepository.findByRoomOrderByTimestampAsc(room);
+        LocalDateTime now = LocalDateTime.now();
 
         messages.stream()
                 .filter(message -> !user.equals(message.getSender()) && message.getReadAt() == null)
-                .forEach(message -> message.setReadAt(LocalDateTime.now()));
+                .forEach(message -> message.setReadAt(now));
     }
 
     public boolean isMember(Room room, User user) {
