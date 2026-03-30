@@ -1,14 +1,16 @@
 package pl.workshop.chatapp.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
-import pl.workshop.chatapp.model.Room;
 import pl.workshop.chatapp.model.User;
+import pl.workshop.chatapp.model.UserSession;
 import pl.workshop.chatapp.repository.RoomRepository;
 import pl.workshop.chatapp.repository.UserRepository;
 import pl.workshop.chatapp.security.JwtService;
 import pl.workshop.chatapp.service.PasswordService;
+import pl.workshop.chatapp.service.SessionService;
 
 import java.security.Principal;
 import java.util.Map;
@@ -22,21 +24,24 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final PasswordService passwordService;
+    private final SessionService sessionService;
 
     public AuthController(UserRepository userRepository,
                           RoomRepository roomRepository,
                           PasswordEncoder passwordEncoder,
                           JwtService jwtService,
-                          PasswordService passwordService) {
+                          PasswordService passwordService,
+                          SessionService sessionService) {
         this.userRepository = userRepository;
         this.roomRepository = roomRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.passwordService = passwordService;
+        this.sessionService = sessionService;
     }
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody Map<String, String> request) {
+    public ResponseEntity<?> register(@RequestBody Map<String, String> request, HttpServletRequest httpRequest) {
         String email = request.get("email");
         String username = request.get("username");
         String password = request.get("password");
@@ -62,20 +67,21 @@ public class AuthController {
         user.setEmail(email);
         user.setUsername(username);
         user.setPassword(passwordEncoder.encode(password));
-
         userRepository.save(user);
 
-        String token = jwtService.generateToken(user.getUsername());
+        UserSession session = sessionService.createLoginSession(username, httpRequest.getRemoteAddr(), httpRequest.getHeader("User-Agent"));
+        String token = jwtService.generateToken(user.getUsername(), session.getSessionId());
 
         return ResponseEntity.ok(Map.of(
                 "token", token,
                 "username", user.getUsername(),
-                "email", user.getEmail()
+                "email", user.getEmail(),
+                "sessionId", session.getSessionId()
         ));
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody Map<String, String> request) {
+    public ResponseEntity<?> login(@RequestBody Map<String, String> request, HttpServletRequest httpRequest) {
         String email = request.get("email");
         String password = request.get("password");
 
@@ -91,13 +97,32 @@ public class AuthController {
             return ResponseEntity.badRequest().body("Nieprawidłowy email lub hasło");
         }
 
-        String token = jwtService.generateToken(user.getUsername());
+        UserSession session = sessionService.createLoginSession(user.getUsername(), httpRequest.getRemoteAddr(), httpRequest.getHeader("User-Agent"));
+        String token = jwtService.generateToken(user.getUsername(), session.getSessionId());
 
         return ResponseEntity.ok(Map.of(
                 "token", token,
                 "username", user.getUsername(),
-                "email", user.getEmail()
+                "email", user.getEmail(),
+                "sessionId", session.getSessionId()
         ));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(@RequestHeader(value = "Authorization", required = false) String authorization,
+                                    Principal principal) {
+        if (principal == null || principal.getName() == null || principal.getName().isBlank()) {
+            return ResponseEntity.badRequest().body("Brak zalogowanego użytkownika");
+        }
+        if (authorization == null || !authorization.startsWith("Bearer ")) {
+            return ResponseEntity.badRequest().body("Brak tokenu Bearer");
+        }
+
+        String token = authorization.substring(7);
+        String sessionId = jwtService.extractSessionId(token);
+        sessionService.logoutSession(principal.getName(), sessionId);
+
+        return ResponseEntity.ok("Wylogowano bieżącą sesję");
     }
 
     @PostMapping("/change-password")

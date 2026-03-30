@@ -11,6 +11,7 @@ import pl.workshop.chatapp.repository.UserSessionRepository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -19,19 +20,35 @@ public class SessionService {
     private final UserSessionRepository sessionRepo;
     private final UserRepository userRepo;
 
+    public UserSession createLoginSession(String username, String ip, String userAgent) {
+        User user = userRepo.findByUsername(username).orElseThrow();
+
+        UserSession session = new UserSession();
+        session.setUser(user);
+        session.setSessionId(UUID.randomUUID().toString());
+        session.setIpAddress(ip);
+        session.setUserAgent(userAgent);
+        session.setLastActivity(LocalDateTime.now());
+        session.setActive(true);
+        UserSession saved = sessionRepo.save(session);
+
+        user.setLastActivity(LocalDateTime.now());
+        user.setPresenceStatus(PresenceStatus.ONLINE);
+        userRepo.save(user);
+        return saved;
+    }
+
     public void updateActivity(String username, String sessionId, String ip, String userAgent) {
         User user = userRepo.findByUsername(username).orElseThrow();
-        UserSession session = sessionRepo.findByUser(user).stream()
-                .filter(s -> s.getSessionId().equals(sessionId))
-                .findFirst()
+        UserSession session = sessionRepo.findBySessionIdAndUser(sessionId, user)
                 .orElseGet(() -> {
                     UserSession newSession = new UserSession();
                     newSession.setUser(user);
                     newSession.setSessionId(sessionId);
-                    newSession.setIpAddress(ip);
-                    newSession.setUserAgent(userAgent);
                     return newSession;
                 });
+        session.setIpAddress(ip);
+        session.setUserAgent(userAgent);
         session.setLastActivity(LocalDateTime.now());
         session.setActive(true);
         sessionRepo.save(session);
@@ -41,25 +58,61 @@ public class SessionService {
         userRepo.save(user);
     }
 
-    public void logoutSession(String sessionId) {
-        sessionRepo.deleteBySessionId(sessionId);
+    public boolean isSessionActive(String username, String sessionId) {
+        User user = userRepo.findByUsername(username).orElse(null);
+        if (user == null) {
+            return false;
+        }
+        return sessionRepo.findBySessionIdAndUser(sessionId, user)
+                .map(UserSession::isActive)
+                .orElse(false);
     }
 
-    public List<UserSession> getActiveSessions(Long userId) {
-        User user = userRepo.findById(userId).orElseThrow();
-        return sessionRepo.findByUser(user);
+    public void logoutSession(String username, String sessionId) {
+        User user = userRepo.findByUsername(username).orElseThrow();
+        UserSession session = sessionRepo.findBySessionIdAndUser(sessionId, user).orElseThrow();
+        session.setActive(false);
+        sessionRepo.save(session);
+        updatePresenceFromSessions(user);
     }
 
-    // AFK po 1 minucie braku aktywności
-    @Scheduled(fixedRate = 30000) // co 30 sekund
+    public List<UserSession> getActiveSessions(String username) {
+        User user = userRepo.findByUsername(username).orElseThrow();
+        return sessionRepo.findByUserAndActiveTrue(user);
+    }
+
+    private void updatePresenceFromSessions(User user) {
+        List<UserSession> activeSessions = sessionRepo.findByUserAndActiveTrue(user);
+        if (activeSessions.isEmpty()) {
+            user.setPresenceStatus(PresenceStatus.OFFLINE);
+        } else {
+            LocalDateTime threshold = LocalDateTime.now().minusMinutes(1);
+            boolean anyRecentlyActive = activeSessions.stream()
+                    .anyMatch(s -> s.getLastActivity() != null && s.getLastActivity().isAfter(threshold));
+            user.setPresenceStatus(anyRecentlyActive ? PresenceStatus.ONLINE : PresenceStatus.AFK);
+            user.setLastActivity(activeSessions.stream()
+                    .map(UserSession::getLastActivity)
+                    .filter(t -> t != null)
+                    .max(LocalDateTime::compareTo)
+                    .orElse(LocalDateTime.now()));
+        }
+        userRepo.save(user);
+    }
+
+    @Scheduled(fixedRate = 30000)
     public void checkAFK() {
         LocalDateTime threshold = LocalDateTime.now().minusMinutes(1);
         List<User> users = userRepo.findAll();
         for (User user : users) {
-            if (user.getLastActivity().isBefore(threshold)) {
-                user.setPresenceStatus(PresenceStatus.AFK);
-                userRepo.save(user);
+            List<UserSession> activeSessions = sessionRepo.findByUserAndActiveTrue(user);
+            if (activeSessions.isEmpty()) {
+                user.setPresenceStatus(PresenceStatus.OFFLINE);
+            } else {
+                boolean anyRecentlyActive = activeSessions.stream()
+                        .anyMatch(s -> s.getLastActivity() != null && s.getLastActivity().isAfter(threshold));
+                user.setPresenceStatus(anyRecentlyActive ? PresenceStatus.ONLINE : PresenceStatus.AFK);
             }
+            userRepo.save(user);
         }
     }
 }

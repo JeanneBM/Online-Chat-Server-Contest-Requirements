@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
 import java.util.Date;
+import java.util.UUID;
 
 @Service
 public class JwtService {
@@ -23,8 +24,13 @@ public class JwtService {
     }
 
     public String generateToken(String username) {
+        return generateToken(username, UUID.randomUUID().toString());
+    }
+
+    public String generateToken(String username, String sessionId) {
         return Jwts.builder()
                 .subject(username)
+                .claim("sessionId", sessionId)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + expiration))
                 .signWith(getSigningKey())
@@ -33,6 +39,10 @@ public class JwtService {
 
     public String extractUsername(String token) {
         return getClaims(token).getSubject();
+    }
+
+    public String extractSessionId(String token) {
+        return getClaims(token).get("sessionId", String.class);
     }
 
     private Claims getClaims(String token) {
@@ -45,6 +55,11 @@ public class JwtService {
 
     public boolean isTokenValid(String token, String username) {
         return username.equals(extractUsername(token)) && !isTokenExpired(token);
+    }
+
+    public boolean isTokenValid(String token) {
+        String username = extractUsername(token);
+        return username != null && !isTokenExpired(token);
     }
 
     private boolean isTokenExpired(String token) {

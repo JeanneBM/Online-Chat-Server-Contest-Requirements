@@ -34,13 +34,12 @@ public class UserController {
 
     @GetMapping("/sessions")
     public List<UserSession> getSessions(Principal principal) {
-        User user = userRepository.findByUsername(principal.getName()).orElseThrow();
-        return sessionService.getActiveSessions(user.getId());
+        return sessionService.getActiveSessions(principal.getName());
     }
 
     @DeleteMapping("/sessions/{sessionId}")
-    public ResponseEntity<?> logoutSession(@PathVariable String sessionId) {
-        sessionService.logoutSession(sessionId);
+    public ResponseEntity<?> logoutSession(@PathVariable String sessionId, Principal principal) {
+        sessionService.logoutSession(principal.getName(), sessionId);
         return ResponseEntity.ok("Sesja wylogowana");
     }
 }

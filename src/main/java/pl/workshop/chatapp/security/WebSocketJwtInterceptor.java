@@ -7,14 +7,17 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.stereotype.Component;
+import pl.workshop.chatapp.service.SessionService;
 
 @Component
 public class WebSocketJwtInterceptor implements ChannelInterceptor {
 
     private final JwtService jwtService;
+    private final SessionService sessionService;
 
-    public WebSocketJwtInterceptor(JwtService jwtService) {
+    public WebSocketJwtInterceptor(JwtService jwtService, SessionService sessionService) {
         this.jwtService = jwtService;
+        this.sessionService = sessionService;
     }
 
     @Override
@@ -27,10 +30,14 @@ public class WebSocketJwtInterceptor implements ChannelInterceptor {
                 String token = authHeader.substring(7);
                 try {
                     String username = jwtService.extractUsername(token);
-                    if (jwtService.isTokenValid(token, username)) {
+                    String sessionId = jwtService.extractSessionId(token);
+                    if (jwtService.isTokenValid(token, username)
+                            && sessionId != null
+                            && sessionService.isSessionActive(username, sessionId)) {
                         accessor.setUser(new UsernamePasswordAuthenticationToken(username, null));
                     }
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                }
             }
         }
         return message;
