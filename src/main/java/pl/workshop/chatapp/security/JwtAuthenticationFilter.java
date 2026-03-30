@@ -22,18 +22,23 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final UserRepository userRepository;
     private final SessionService sessionService;
 
-    public JwtAuthenticationFilter(JwtService jwtService,
-                                   UserRepository userRepository,
-                                   SessionService sessionService) {
+    public JwtAuthenticationFilter(
+            JwtService jwtService,
+            UserRepository userRepository,
+            SessionService sessionService
+    ) {
         this.jwtService = jwtService;
         this.userRepository = userRepository;
         this.sessionService = sessionService;
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain
+    ) throws ServletException, IOException {
+
         final String authHeader = request.getHeader("Authorization");
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
@@ -43,21 +48,28 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
             String token = authHeader.substring(7);
-            String username = jwtService.extractUsername(token);
+            String email = jwtService.extractEmail(token);
             String sessionId = jwtService.extractSessionId(token);
 
-            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                User user = userRepository.findByUsername(username).orElse(null);
+            if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                User user = userRepository.findByEmail(email).orElse(null);
+
                 boolean valid = user != null
-                        && jwtService.isTokenValid(token, username)
+                        && jwtService.isTokenValid(token, email)
                         && sessionId != null
-                        && sessionService.isSessionActive(username, sessionId);
+                        && sessionService.isSessionActive(email, sessionId);
 
                 if (valid) {
-                    sessionService.updateActivity(username, sessionId, request.getRemoteAddr(), request.getHeader("User-Agent"));
+                    sessionService.updateActivity(
+                            email,
+                            sessionId,
+                            request.getRemoteAddr(),
+                            request.getHeader("User-Agent")
+                    );
 
                     UsernamePasswordAuthenticationToken authToken =
                             new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
+
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authToken);
                 }
