@@ -9,8 +9,10 @@ import java.util.Comparator;
 @Service
 public class FileService {
 
+    private static final Path UPLOAD_ROOT = Paths.get("./uploads").toAbsolutePath().normalize();
+
     public void deleteRoomFiles(Long roomId) {
-        Path roomDir = Paths.get("./uploads/room-" + roomId);
+        Path roomDir = UPLOAD_ROOT.resolve("room-" + roomId).normalize();
         if (Files.notExists(roomDir) || !Files.isDirectory(roomDir)) {
             return;
         }
@@ -28,17 +30,33 @@ public class FileService {
     }
 
     public void deleteFile(String fileUrl) {
-        if (fileUrl == null || fileUrl.isBlank()) {
+        Path resolved = resolveUploadPath(fileUrl);
+        if (resolved == null) {
             return;
         }
 
-        String normalized = fileUrl.startsWith("/uploads/")
-                ? "." + fileUrl
-                : fileUrl;
-
         try {
-            Files.deleteIfExists(Paths.get(normalized));
+            Files.deleteIfExists(resolved);
         } catch (IOException ignored) {
         }
+    }
+
+    private Path resolveUploadPath(String fileUrl) {
+        if (fileUrl == null || fileUrl.isBlank()) {
+            return null;
+        }
+
+        String normalizedUrl = fileUrl.trim().replace('\\', '/');
+        if (normalizedUrl.startsWith("/uploads/")) {
+            normalizedUrl = normalizedUrl.substring("/uploads/".length());
+            return UPLOAD_ROOT.resolve(normalizedUrl).normalize();
+        }
+
+        Path rawPath = Paths.get(normalizedUrl).normalize();
+        if (rawPath.isAbsolute()) {
+            return rawPath;
+        }
+
+        return rawPath.toAbsolutePath().normalize();
     }
 }
