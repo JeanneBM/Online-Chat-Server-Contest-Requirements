@@ -1,10 +1,8 @@
 package pl.workshop.chatapp.service;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import pl.workshop.chatapp.model.ChatMessage;
 import pl.workshop.chatapp.model.Message;
 import pl.workshop.chatapp.model.Room;
 import pl.workshop.chatapp.model.User;
@@ -12,10 +10,7 @@ import pl.workshop.chatapp.repository.MessageRepository;
 import pl.workshop.chatapp.repository.RoomRepository;
 import pl.workshop.chatapp.repository.UserRepository;
 
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -24,107 +19,164 @@ import java.util.List;
 public class MessageService {
 
     private final MessageRepository messageRepository;
-    private final RoomRepository roomRepository;
     private final UserRepository userRepository;
-    private final RoomService roomService;
+    private final RoomRepository roomRepository;
 
-    public ChatMessage sendRoomMessage(String roomId, ChatMessage chatMessage, SimpMessageHeaderAccessor headerAccessor) {
-        String username = headerAccessor.getUser().getName();
-        User sender = userRepository.findByUsername(username).orElseThrow();
-        Room room = roomRepository.findById(Long.valueOf(roomId)).orElseThrow();
-
-        if (!roomService.isMember(room, sender)) {
-            throw new IllegalStateException("Nie należysz do tego pokoju");
-        }
-        validateMessage(chatMessage);
-
-        Message dbMessage = new Message();
-        dbMessage.setRoom(room);
-        dbMessage.setSender(sender);
-        dbMessage.setContent(chatMessage.getContent());
-        dbMessage.setAttachmentUrl(chatMessage.getAttachmentUrl());
-        dbMessage.setReplyToId(chatMessage.getReplyToId());
-        dbMessage.setTimestamp(LocalDateTime.now());
-        messageRepository.save(dbMessage);
-
-        chatMessage.setSender(sender.getUsername());
-        chatMessage.setTimestamp(dbMessage.getTimestamp());
-        chatMessage.setRoomId(roomId);
-        return chatMessage;
-    }
-
-    public ChatMessage sendPrivateMessage(User sender, User receiver, ChatMessage chatMessage) {
-        validateMessage(chatMessage);
-
-        Message dbMessage = new Message();
-        dbMessage.setSender(sender);
-        dbMessage.setReceiver(receiver);
-        dbMessage.setContent(chatMessage.getContent());
-        dbMessage.setAttachmentUrl(chatMessage.getAttachmentUrl());
-        dbMessage.setReplyToId(chatMessage.getReplyToId());
-        dbMessage.setTimestamp(LocalDateTime.now());
-        messageRepository.save(dbMessage);
-
-        chatMessage.setSender(sender.getUsername());
-        chatMessage.setTimestamp(dbMessage.getTimestamp());
-        return chatMessage;
-    }
-
-    public List<Message> getRoomMessages(Long roomId, String username) {
+    public Message sendRoomMessage(Long roomId, String email, String content, String attachmentUrl, Long replyToId) {
+        User sender = findUserByEmail(email);
         Room room = roomRepository.findById(roomId).orElseThrow();
-        User user = userRepository.findByUsername(username).orElseThrow();
-        if (!roomService.isMember(room, user)) {
-            throw new SecurityException("Brak dostępu do historii tego pokoju");
+
+        if (!isRoomMember(room, sender)) {
+            throw new SecurityException("Nie należysz do tego pokoju");
         }
+
+        if (room.getBannedUsers().contains(sender)) {
+            throw new SecurityException("Jesteś zbanowany w tym pokoju");
+        }
+
+        Message message = new Message();
+        message.setSender(sender);
+        message.setRoom(room);
+        message.setContent(content);
+        message.setAttachmentUrl(attachmentUrl);
+        message.setTimestamp(LocalDateTime.now());
+
+        if (replyToId != null) {
+            Message replyTo = messageRepository.findById(replyToId).orElseThrow();
+            if (replyTo.getRoom() == null || !replyTo.getRoom().getId().equals(roomId)) {
+                throw new IllegalArgumentException("Nieprawidłowa wiadomość do odpowiedzi");
+            }
+            message.setReplyTo(replyTo);
+        }
+
+        return messageRepository.save(message);
+    }
+
+    public Message sendPrivateMessage(String senderEmail, String receiverUsername, String content, String attachmentUrl, Long replyToId) {
+        User sender = findUserByEmail(senderEmail);
+        User receiver = findUserByUsername(receiverUsername);
+
+        if (!areFriends(sender, receiver)) {
+            throw new SecurityException("Wiadomości prywatne są dostępne tylko dla znajomych");
+        }
+
+        if (isBlockedEitherWay(sender, receiver)) {
+            throw new SecurityException("Nie można wysłać wiadomości do tego użytkownika");
+        }
+
+        Message message = new Message();
+        message.setSender(sender);
+        message.setReceiver(receiver);
+        message.setContent(content);
+        message.setAttachmentUrl(attachmentUrl);
+        message.setTimestamp(LocalDateTime.now());
+
+        if (replyToId != null) {
+            Message replyTo = messageRepository.findById(replyToId).orElseThrow();
+
+            boolean belongsToConversation =
+                    (replyTo.getSender().equals(sender) && replyTo.getReceiver() != null && replyTo.getReceiver().equals(receiver)) ||
+                    (replyTo.getSender().equals(receiver) && replyTo.getReceiver() != null && replyTo.getReceiver().equals(sender));
+
+            if (!belongsToConversation) {
+                throw new IllegalArgumentException("Nieprawidłowa wiadomość do odpowiedzi");
+            }
+
+            message.setReplyTo(replyTo);
+        }
+
+        return messageRepository.save(message);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Message> getRoomMessages(Long roomId, String email) {
+        User user = findUserByEmail(email);
+        Room room = roomRepository.findById(roomId).orElseThrow();
+
+        if (!isRoomMember(room, user)) {
+            throw new SecurityException("Brak dostępu do pokoju");
+        }
+
         return messageRepository.findByRoomOrderByTimestampAsc(room);
     }
 
-    public List<Message> getPrivateMessages(String username, String otherUsername) {
-        User user = userRepository.findByUsername(username).orElseThrow();
-        User other = userRepository.findByUsername(otherUsername).orElseThrow();
+    @Transactional(readOnly = true)
+    public List<Message> getPrivateMessages(String email, String otherUsername) {
+        User user = findUserByEmail(email);
+        User other = findUserByUsername(otherUsername);
 
-        List<Message> result = new ArrayList<>();
-        result.addAll(messageRepository.findBySenderAndReceiverOrderByTimestampAsc(user, other));
-        result.addAll(messageRepository.findByReceiverAndSenderOrderByTimestampAsc(user, other));
-        result.sort(Comparator.comparing(Message::getTimestamp));
-        return result;
-    }
-
-    public void markPrivateMessagesRead(String username, String otherUsername) {
-        User user = userRepository.findByUsername(username).orElseThrow();
-        User other = userRepository.findByUsername(otherUsername).orElseThrow();
-        messageRepository.findBySenderAndReceiverOrderByTimestampAsc(other, user).stream()
-                .filter(m -> m.getReadAt() == null)
-                .forEach(m -> m.setReadAt(LocalDateTime.now()));
-    }
-
-    public long getUnreadPrivateCount(String username) {
-        User user = userRepository.findByUsername(username).orElseThrow();
-        return messageRepository.countUnreadPrivateMessages(user);
-    }
-
-    public long getUnreadRoomCount(String username) {
-        User user = userRepository.findByUsername(username).orElseThrow();
-        List<Room> rooms = roomRepository.findAll().stream()
-                .filter(room -> roomService.isMember(room, user))
-                .toList();
-        if (rooms.isEmpty()) {
-            return 0L;
+        if (!areFriends(user, other) && !hasAnyPrivateMessages(user, other)) {
+            throw new SecurityException("Brak dostępu do tej rozmowy");
         }
-        return messageRepository.countUnreadRoomMessages(user, rooms);
+
+        return messageRepository.findConversation(user, other);
     }
 
-    private void validateMessage(ChatMessage chatMessage) {
-        String content = chatMessage.getContent();
-        String attachmentUrl = chatMessage.getAttachmentUrl();
-        boolean hasText = content != null && !content.isBlank();
-        boolean hasAttachment = attachmentUrl != null && !attachmentUrl.isBlank();
+    public void markPrivateMessagesRead(String email, String otherUsername) {
+        User user = findUserByEmail(email);
+        User other = findUserByUsername(otherUsername);
 
-        if (!hasText && !hasAttachment) {
-            throw new IllegalArgumentException("Wiadomość musi zawierać tekst lub załącznik");
+        List<Message> conversation = messageRepository.findConversation(user, other);
+
+        conversation.stream()
+                .filter(message -> other.equals(message.getSender()))
+                .filter(message -> user.equals(message.getReceiver()))
+                .filter(message -> message.getReadAt() == null)
+                .forEach(message -> message.setReadAt(LocalDateTime.now()));
+    }
+
+    @Transactional(readOnly = true)
+    public long getUnreadPrivateCount(String email) {
+        User user = findUserByEmail(email);
+        return messageRepository.countByReceiverAndReadAtIsNull(user);
+    }
+
+    @Transactional(readOnly = true)
+    public long getUnreadRoomCount(Long roomId, String email) {
+        User user = findUserByEmail(email);
+        Room room = roomRepository.findById(roomId).orElseThrow();
+
+        if (!isRoomMember(room, user)) {
+            throw new SecurityException("Brak dostępu do pokoju");
         }
-        if (hasText && content.getBytes(StandardCharsets.UTF_8).length > 3072) {
-            throw new IllegalArgumentException("Maksymalny rozmiar tekstu wiadomości to 3 KB");
+
+        return messageRepository.findByRoomOrderByTimestampAsc(room).stream()
+                .filter(message -> !user.equals(message.getSender()))
+                .filter(message -> message.getReadAt() == null)
+                .count();
+    }
+
+    private User findUserByEmail(String email) {
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("Email jest wymagany");
         }
+        return userRepository.findByEmail(email.trim().toLowerCase()).orElseThrow();
+    }
+
+    private User findUserByUsername(String username) {
+        if (username == null || username.isBlank()) {
+            throw new IllegalArgumentException("Username jest wymagany");
+        }
+        return userRepository.findByUsername(username.trim()).orElseThrow();
+    }
+
+    private boolean isRoomMember(Room room, User user) {
+        return room.getOwner().equals(user)
+                || room.getAdmins().contains(user)
+                || room.getMembers().contains(user);
+    }
+
+    private boolean areFriends(User a, User b) {
+        return a.getFriends() != null && a.getFriends().contains(b)
+                && b.getFriends() != null && b.getFriends().contains(a);
+    }
+
+    private boolean isBlockedEitherWay(User a, User b) {
+        return (a.getBannedUsers() != null && a.getBannedUsers().contains(b))
+                || (b.getBannedUsers() != null && b.getBannedUsers().contains(a));
+    }
+
+    private boolean hasAnyPrivateMessages(User a, User b) {
+        return !messageRepository.findConversation(a, b).isEmpty();
     }
 }
