@@ -26,12 +26,14 @@ public class AuthController {
     private final PasswordService passwordService;
     private final SessionService sessionService;
 
-    public AuthController(UserRepository userRepository,
-                          RoomRepository roomRepository,
-                          PasswordEncoder passwordEncoder,
-                          JwtService jwtService,
-                          PasswordService passwordService,
-                          SessionService sessionService) {
+    public AuthController(
+            UserRepository userRepository,
+            RoomRepository roomRepository,
+            PasswordEncoder passwordEncoder,
+            JwtService jwtService,
+            PasswordService passwordService,
+            SessionService sessionService
+    ) {
         this.userRepository = userRepository;
         this.roomRepository = roomRepository;
         this.passwordEncoder = passwordEncoder;
@@ -46,11 +48,10 @@ public class AuthController {
         String username = request.get("username");
         String password = request.get("password");
 
-        email = email != null ? email.trim() : null;
+        email = email != null ? email.trim().toLowerCase() : null;
         username = username != null ? username.trim() : null;
 
-        if (email == null || email.isBlank()
-                || username == null || username.isBlank()
+        if (email == null || email.isBlank() || username == null || username.isBlank()
                 || password == null || password.isBlank()) {
             return ResponseEntity.badRequest().body("Email, username i password są wymagane");
         }
@@ -69,8 +70,13 @@ public class AuthController {
         user.setPassword(passwordEncoder.encode(password));
         userRepository.save(user);
 
-        UserSession session = sessionService.createLoginSession(username, httpRequest.getRemoteAddr(), httpRequest.getHeader("User-Agent"));
-        String token = jwtService.generateToken(user.getUsername(), session.getSessionId());
+        UserSession session = sessionService.createLoginSession(
+                user.getEmail(),
+                httpRequest.getRemoteAddr(),
+                httpRequest.getHeader("User-Agent")
+        );
+
+        String token = jwtService.generateToken(user.getEmail(), session.getSessionId());
 
         return ResponseEntity.ok(Map.of(
                 "token", token,
@@ -85,20 +91,25 @@ public class AuthController {
         String email = request.get("email");
         String password = request.get("password");
 
-        email = email != null ? email.trim() : null;
+        email = email != null ? email.trim().toLowerCase() : null;
 
-        if (email == null || email.isBlank()
-                || password == null || password.isBlank()) {
+        if (email == null || email.isBlank() || password == null || password.isBlank()) {
             return ResponseEntity.badRequest().body("Email i password są wymagane");
         }
 
         User user = userRepository.findByEmail(email).orElse(null);
+
         if (user == null || !passwordEncoder.matches(password, user.getPassword())) {
             return ResponseEntity.badRequest().body("Nieprawidłowy email lub hasło");
         }
 
-        UserSession session = sessionService.createLoginSession(user.getUsername(), httpRequest.getRemoteAddr(), httpRequest.getHeader("User-Agent"));
-        String token = jwtService.generateToken(user.getUsername(), session.getSessionId());
+        UserSession session = sessionService.createLoginSession(
+                user.getEmail(),
+                httpRequest.getRemoteAddr(),
+                httpRequest.getHeader("User-Agent")
+        );
+
+        String token = jwtService.generateToken(user.getEmail(), session.getSessionId());
 
         return ResponseEntity.ok(Map.of(
                 "token", token,
@@ -109,17 +120,21 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<?> logout(@RequestHeader(value = "Authorization", required = false) String authorization,
-                                    Principal principal) {
+    public ResponseEntity<?> logout(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            Principal principal
+    ) {
         if (principal == null || principal.getName() == null || principal.getName().isBlank()) {
             return ResponseEntity.badRequest().body("Brak zalogowanego użytkownika");
         }
+
         if (authorization == null || !authorization.startsWith("Bearer ")) {
             return ResponseEntity.badRequest().body("Brak tokenu Bearer");
         }
 
         String token = authorization.substring(7);
         String sessionId = jwtService.extractSessionId(token);
+
         sessionService.logoutSession(principal.getName(), sessionId);
 
         return ResponseEntity.ok("Wylogowano bieżącą sesję");
@@ -131,16 +146,15 @@ public class AuthController {
             return ResponseEntity.badRequest().body("Brak zalogowanego użytkownika");
         }
 
-        String username = principal.getName();
+        String email = principal.getName();
         String oldPassword = request.get("oldPassword");
         String newPassword = request.get("newPassword");
 
-        if (oldPassword == null || oldPassword.isBlank()
-                || newPassword == null || newPassword.isBlank()) {
+        if (oldPassword == null || oldPassword.isBlank() || newPassword == null || newPassword.isBlank()) {
             return ResponseEntity.badRequest().body("oldPassword i newPassword są wymagane");
         }
 
-        User user = userRepository.findByUsername(username).orElseThrow();
+        User user = userRepository.findByEmail(email).orElseThrow();
         passwordService.changePassword(user.getId(), oldPassword, newPassword);
 
         return ResponseEntity.ok("Hasło zmienione pomyślnie");
@@ -148,7 +162,7 @@ public class AuthController {
 
     @PostMapping("/reset-token")
     public ResponseEntity<?> createResetToken(@RequestParam String email) {
-        email = email != null ? email.trim() : null;
+        email = email != null ? email.trim().toLowerCase() : null;
 
         if (email == null || email.isBlank()) {
             return ResponseEntity.badRequest().body("Email jest wymagany");
@@ -163,8 +177,7 @@ public class AuthController {
         String token = request.get("token");
         String newPassword = request.get("newPassword");
 
-        if (token == null || token.isBlank()
-                || newPassword == null || newPassword.isBlank()) {
+        if (token == null || token.isBlank() || newPassword == null || newPassword.isBlank()) {
             return ResponseEntity.badRequest().body("Token i newPassword są wymagane");
         }
 
@@ -178,7 +191,7 @@ public class AuthController {
             return ResponseEntity.badRequest().body("Brak zalogowanego użytkownika");
         }
 
-        User user = userRepository.findByUsername(principal.getName()).orElseThrow();
+        User user = userRepository.findByEmail(principal.getName()).orElseThrow();
 
         roomRepository.findAll().forEach(room -> {
             room.getMembers().remove(user);
