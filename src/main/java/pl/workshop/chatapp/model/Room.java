@@ -45,7 +45,3 @@ public class Room {
                inverseJoinColumns = @JoinColumn(name = "user_id"))
     private Set<User> bannedUsers = new HashSet<>();
 }
-
-public enum RoomType {
-    PUBLIC, PRIVATE
-}

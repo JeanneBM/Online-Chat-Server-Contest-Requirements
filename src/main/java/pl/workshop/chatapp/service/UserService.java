@@ -3,6 +3,7 @@ package pl.workshop.chatapp.service;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import pl.workshop.chatapp.model.Room;
 import pl.workshop.chatapp.model.User;
 import pl.workshop.chatapp.repository.RoomRepository;
 import pl.workshop.chatapp.repository.UserRepository;
@@ -19,11 +20,15 @@ public class UserService {
     public void deleteAccount(Long userId) {
         User user = userRepository.findById(userId).orElseThrow();
 
-        // Usuwamy wszystkie pokoje, których jest ownerem + pliki
-        roomRepository.findByOwner(user).forEach(room -> {
+        roomRepository.findAll().forEach(room -> {
+            room.getMembers().remove(user);
+            room.getAdmins().remove(user);
+        });
+
+        for (Room room : roomRepository.findByOwner(user)) {
             fileService.deleteRoomFiles(room.getId());
             roomRepository.delete(room);
-        });
+        }
 
         userRepository.delete(user);
     }

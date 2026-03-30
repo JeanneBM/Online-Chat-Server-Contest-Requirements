@@ -2,6 +2,7 @@ package pl.workshop.chatapp.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.LocalDateTime;
 
 @Entity
@@ -18,14 +19,19 @@ public class Message {
     private Room room;
 
     @ManyToOne
-    @JoinColumn(name = "sender_id")
+    @JoinColumn(name = "sender_id", nullable = false)
     private User sender;
 
+    @ManyToOne
+    @JoinColumn(name = "receiver_id")
+    private User receiver;
+
+    @Column(length = 3072)
     private String content;
 
-    private String attachmentUrl; // później na pliki
+    private String attachmentUrl;
 
     private LocalDateTime timestamp = LocalDateTime.now();
 
-    private Long replyToId; // opcjonalne
+    private Long replyToId;
 }

@@ -1,10 +1,14 @@
 package pl.workshop.chatapp.service;
 
-import pl.workshop.chatapp.model.*;
-import pl.workshop.chatapp.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import pl.workshop.chatapp.model.FriendRequest;
+import pl.workshop.chatapp.model.User;
+import pl.workshop.chatapp.model.UserBan;
+import pl.workshop.chatapp.repository.FriendRequestRepository;
+import pl.workshop.chatapp.repository.UserBanRepository;
+import pl.workshop.chatapp.repository.UserRepository;
 
 import java.util.List;
 
@@ -21,7 +25,13 @@ public class FriendService {
         User sender = userRepo.findById(senderId).orElseThrow();
         User receiver = userRepo.findByUsername(receiverUsername).orElseThrow();
 
-        if (sender.equals(receiver)) throw new IllegalArgumentException("Nie możesz dodać samego siebie");
+        if (sender.equals(receiver)) {
+            throw new IllegalArgumentException("Nie możesz dodać samego siebie");
+        }
+
+        if (userBanRepo.existsByBannerAndBanned(sender, receiver) || userBanRepo.existsByBannerAndBanned(receiver, sender)) {
+            throw new IllegalStateException("Nie można wysłać zaproszenia z powodu bana");
+        }
 
         FriendRequest existing = friendRequestRepo.findBySenderAndReceiver(sender, receiver).orElse(null);
         if (existing != null && existing.getStatus() == FriendRequest.FriendRequestStatus.PENDING) {
@@ -37,7 +47,9 @@ public class FriendService {
 
     public void acceptFriendRequest(Long requestId, Long userId) {
         FriendRequest req = friendRequestRepo.findById(requestId).orElseThrow();
-        if (!req.getReceiver().getId().equals(userId)) throw new SecurityException("Nie Twoja prośba");
+        if (!req.getReceiver().getId().equals(userId)) {
+            throw new SecurityException("Nie Twoja prośba");
+        }
 
         req.setStatus(FriendRequest.FriendRequestStatus.ACCEPTED);
         req.getSender().getFriends().add(req.getReceiver());
@@ -45,7 +57,14 @@ public class FriendService {
         friendRequestRepo.save(req);
     }
 
-    public void rejectFriendRequest(Long requestId, Long userId) { /* analogicznie */ }
+    public void rejectFriendRequest(Long requestId, Long userId) {
+        FriendRequest req = friendRequestRepo.findById(requestId).orElseThrow();
+        if (!req.getReceiver().getId().equals(userId)) {
+            throw new SecurityException("Nie Twoja prośba");
+        }
+        req.setStatus(FriendRequest.FriendRequestStatus.REJECTED);
+        friendRequestRepo.save(req);
+    }
 
     public void removeFriend(Long userId, Long friendId) {
         User user = userRepo.findById(userId).orElseThrow();
@@ -58,14 +77,15 @@ public class FriendService {
         User banner = userRepo.findById(bannerId).orElseThrow();
         User banned = userRepo.findById(bannedId).orElseThrow();
 
-        if (banner.getBans().stream().anyMatch(b -> b.getBanned().equals(banned))) return;
+        if (userBanRepo.existsByBannerAndBanned(banner, banned)) {
+            return;
+        }
 
         UserBan ban = new UserBan();
         ban.setBanner(banner);
         ban.setBanned(banned);
         userBanRepo.save(ban);
 
-        // zerwanie przyjaźni
         banner.getFriends().remove(banned);
         banned.getFriends().remove(banner);
     }
@@ -76,8 +96,10 @@ public class FriendService {
     }
 
     public boolean canSendPersonalMessage(User sender, User receiver) {
-        return sender.isFriend(receiver) &&
-               !sender.hasBanned(receiver) &&
-               !receiver.hasBanned(sender);
+        return sender.isFriend(receiver)
+                && !sender.hasBanned(receiver)
+                && !receiver.hasBanned(sender)
+                && !userBanRepo.existsByBannerAndBanned(sender, receiver)
+                && !userBanRepo.existsByBannerAndBanned(receiver, sender);
     }
 }
