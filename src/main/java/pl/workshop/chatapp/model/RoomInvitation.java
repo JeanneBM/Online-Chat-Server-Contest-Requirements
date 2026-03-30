@@ -7,7 +7,10 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "room_invitations")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 public class RoomInvitation {
 
     @Id
@@ -28,4 +31,6 @@ public class RoomInvitation {
 
     private LocalDateTime createdAt = LocalDateTime.now();
     private boolean accepted = false;
+    private boolean rejected = false;
+    private LocalDateTime respondedAt;
 }
