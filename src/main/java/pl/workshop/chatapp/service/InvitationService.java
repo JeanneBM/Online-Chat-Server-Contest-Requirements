@@ -23,6 +23,11 @@ public class InvitationService {
     private final RoomRepository roomRepository;
     private final UserRepository userRepository;
 
+    public RoomInvitation inviteToRoom(Long roomId, Long inviterId, String inviteeUsername) {
+        User inviter = userRepository.findById(inviterId).orElseThrow();
+        return inviteUserToPrivateRoom(roomId, inviter, inviteeUsername);
+    }
+
     public RoomInvitation inviteUserToPrivateRoom(Long roomId, User inviter, String inviteeUsername) {
         if (inviter == null) {
             throw new IllegalArgumentException("Inviter jest wymagany");
@@ -66,6 +71,7 @@ public class InvitationService {
         invitation.setCreatedAt(LocalDateTime.now());
         invitation.setAccepted(false);
         invitation.setRejected(false);
+        invitation.setRespondedAt(null);
 
         return invitationRepository.save(invitation);
     }
