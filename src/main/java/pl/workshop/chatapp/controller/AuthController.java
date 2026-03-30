@@ -6,11 +6,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import pl.workshop.chatapp.model.User;
 import pl.workshop.chatapp.model.UserSession;
-import pl.workshop.chatapp.repository.RoomRepository;
 import pl.workshop.chatapp.repository.UserRepository;
 import pl.workshop.chatapp.security.JwtService;
 import pl.workshop.chatapp.service.PasswordService;
 import pl.workshop.chatapp.service.SessionService;
+import pl.workshop.chatapp.service.UserService;
 
 import java.security.Principal;
 import java.util.Map;
@@ -20,26 +20,26 @@ import java.util.Map;
 public class AuthController {
 
     private final UserRepository userRepository;
-    private final RoomRepository roomRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final PasswordService passwordService;
     private final SessionService sessionService;
+    private final UserService userService;
 
     public AuthController(
             UserRepository userRepository,
-            RoomRepository roomRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             PasswordService passwordService,
-            SessionService sessionService
+            SessionService sessionService,
+            UserService userService
     ) {
         this.userRepository = userRepository;
-        this.roomRepository = roomRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.passwordService = passwordService;
         this.sessionService = sessionService;
+        this.userService = userService;
     }
 
     @PostMapping("/register")
@@ -192,18 +192,7 @@ public class AuthController {
         }
 
         User user = userRepository.findByEmail(principal.getName()).orElseThrow();
-
-        roomRepository.findAll().forEach(room -> {
-            room.getMembers().remove(user);
-            room.getAdmins().remove(user);
-        });
-
-        roomRepository.findAll().stream()
-                .filter(room -> room.getOwner() != null && room.getOwner().equals(user))
-                .forEach(roomRepository::delete);
-
-        userRepository.delete(user);
-
+        userService.deleteAccount(user.getId());
         return ResponseEntity.ok("Konto usunięte");
     }
 }
