@@ -130,7 +130,7 @@ public class RoomController {
             return ResponseEntity.badRequest().body("Username jest wymagany");
         }
 
-        User inviter = userRepository.findByUsername(principal.getName()).orElseThrow();
+        User inviter = userRepository.findByEmail(principal.getName()).orElseThrow();
         invitationService.inviteToRoom(roomId, inviter.getId(), username);
 
         return ResponseEntity.ok("Zaproszenie wysłane");
