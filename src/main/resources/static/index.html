@@ -28,7 +28,7 @@
         <h4>Publiczne pokoje</h4>
         <button onclick="loadPublicRooms()">Odśwież</button>
         <div id="room-list"></div>
-        
+
         <hr>
         <input id="new-room-name" placeholder="Nazwa pokoju">
         <button onclick="createRoom()">Utwórz</button>
@@ -56,7 +56,6 @@
     </div>
 </div>
 
-<!-- Auth panel -->
 <div id="auth-panel" style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);color:white;display:flex;align-items:center;justify-content:center;flex-direction:column;z-index:1000;">
     <h2>Online Chat</h2>
     <input id="username" placeholder="Username" value="testuser" style="margin:8px;padding:12px;width:300px;"><br>
@@ -66,32 +65,288 @@
 </div>
 
 <script>
-    // (cały poprzedni kod JavaScript pozostaje bez zmian – tylko dodajemy przycisk delete message)
+    let token = localStorage.getItem("token");
+    let username = localStorage.getItem("username");
+    let stompClient = null;
+    let currentRoom = "public";
+
+    async function login() {
+        const usernameValue = document.getElementById("username").value.trim();
+        const password = document.getElementById("password").value;
+
+        if (!usernameValue || !password) {
+            alert("Username i hasło są wymagane");
+            return;
+        }
+
+        const response = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                username: usernameValue,
+                password: password
+            })
+        });
+
+        if (!response.ok) {
+            alert(await response.text());
+            return;
+        }
+
+        const data = await response.json();
+
+        token = data.token;
+        username = data.username;
+
+        localStorage.setItem("token", token);
+        localStorage.setItem("username", username);
+
+        document.getElementById("auth-panel").style.display = "none";
+
+        connectWebSocket();
+        loadPublicRooms();
+    }
+
+    async function register() {
+        const usernameValue = document.getElementById("username").value.trim();
+        const password = document.getElementById("password").value;
+
+        if (!usernameValue || !password) {
+            alert("Username i hasło są wymagane");
+            return;
+        }
+
+        const response = await fetch("/api/auth/register", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                email: usernameValue + "@local.test",
+                username: usernameValue,
+                password: password
+            })
+        });
+
+        if (!response.ok) {
+            alert(await response.text());
+            return;
+        }
+
+        const data = await response.json();
+
+        token = data.token;
+        username = data.username;
+
+        localStorage.setItem("token", token);
+        localStorage.setItem("username", username);
+
+        document.getElementById("auth-panel").style.display = "none";
+
+        connectWebSocket();
+        loadPublicRooms();
+    }
+
+    function authHeaders() {
+        return {
+            "Authorization": "Bearer " + token
+        };
+    }
+
+    function connectWebSocket() {
+        const socket = new SockJS("/ws");
+        stompClient = Stomp.over(socket);
+
+        stompClient.connect(
+            { Authorization: "Bearer " + token },
+            function () {
+                subscribeRoom(currentRoom);
+            },
+            function (error) {
+                console.error("WebSocket error:", error);
+            }
+        );
+    }
+
+    function subscribeRoom(roomName) {
+        currentRoom = roomName;
+
+        if (!stompClient || !stompClient.connected) {
+            return;
+        }
+
+        stompClient.subscribe("/topic/room/" + roomName, onMessageReceived);
+        document.getElementById("messages").innerHTML = "";
+    }
+
     function onMessageReceived(payload) {
         const msg = JSON.parse(payload.body);
-        const div = document.createElement('div');
-        div.className = 'message';
-        div.innerHTML = `<strong>${msg.sender}:</strong> ${msg.content || ''}`;
-        if (msg.attachmentUrl) div.innerHTML += `<br><a href="${msg.attachmentUrl}" target="_blank">📎 Plik</a>`;
-        
-        // przycisk usuwania wiadomości (widoczny dla admina/owner)
-        const delBtn = document.createElement('span');
-        delBtn.className = 'delete-btn';
-        delBtn.innerHTML = '🗑';
+
+        const div = document.createElement("div");
+        div.className = "message";
+        div.innerHTML = `<strong>${msg.sender}:</strong> ${msg.content || ""}`;
+
+        if (msg.attachmentUrl) {
+            div.innerHTML += `<br><a href="${msg.attachmentUrl}" target="_blank">📎 Plik</a>`;
+        }
+
+        const delBtn = document.createElement("span");
+        delBtn.className = "delete-btn";
+        delBtn.innerHTML = "🗑";
         delBtn.onclick = () => deleteMessage(msg.id || 0);
+
         div.appendChild(delBtn);
-        
-        document.getElementById('messages').appendChild(div);
-        document.getElementById('messages').scrollTop = 999999;
+
+        document.getElementById("messages").appendChild(div);
+        document.getElementById("messages").scrollTop = 999999;
+    }
+
+    function sendMessage() {
+        const input = document.getElementById("message-input");
+        const content = input.value.trim();
+
+        if (!content) {
+            return;
+        }
+
+        if (!stompClient || !stompClient.connected) {
+            alert("Brak połączenia z WebSocket");
+            return;
+        }
+
+        stompClient.send(
+            "/app/chat.sendMessage/" + currentRoom,
+            {},
+            JSON.stringify({
+                content: content
+            })
+        );
+
+        input.value = "";
     }
 
     function deleteMessage(messageId) {
-        if (stompClient) {
-            stompClient.send("/app/chat.deleteMessage/" + currentRoom, {}, JSON.stringify({}));
+        if (!stompClient || !stompClient.connected) {
+            return;
         }
+
+        stompClient.send(
+            "/app/chat.deleteMessage/" + currentRoom,
+            {},
+            JSON.stringify({
+                messageId: messageId
+            })
+        );
     }
 
-    // reszta funkcji (login, register, sendMessage, uploadAndSend, loadPublicRooms itd.) pozostaje dokładnie taka sama jak w poprzedniej wersji
+    async function loadPublicRooms() {
+        if (!token) {
+            return;
+        }
+
+        const response = await fetch("/api/rooms/public", {
+            headers: authHeaders()
+        });
+
+        if (!response.ok) {
+            console.error(await response.text());
+            return;
+        }
+
+        const rooms = await response.json();
+        const list = document.getElementById("room-list");
+        list.innerHTML = "";
+
+        rooms.forEach(room => {
+            const btn = document.createElement("button");
+            btn.textContent = room.name || room.roomName || room;
+            btn.style.display = "block";
+            btn.style.margin = "5px 0";
+            btn.onclick = () => subscribeRoom(btn.textContent);
+            list.appendChild(btn);
+        });
+    }
+
+    async function createRoom() {
+        const name = document.getElementById("new-room-name").value.trim();
+
+        if (!name) {
+            alert("Podaj nazwę pokoju");
+            return;
+        }
+
+        const response = await fetch("/api/rooms", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                ...authHeaders()
+            },
+            body: JSON.stringify({
+                name: name
+            })
+        });
+
+        if (!response.ok) {
+            alert(await response.text());
+            return;
+        }
+
+        document.getElementById("new-room-name").value = "";
+        loadPublicRooms();
+    }
+
+    async function sendFriendRequest() {
+        const friendUsername = document.getElementById("friend-username").value.trim();
+
+        if (!friendUsername) {
+            alert("Podaj username znajomego");
+            return;
+        }
+
+        const response = await fetch("/api/friends/request", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                ...authHeaders()
+            },
+            body: JSON.stringify({
+                username: friendUsername
+            })
+        });
+
+        if (!response.ok) {
+            alert(await response.text());
+            return;
+        }
+
+        alert("Wysłano zaproszenie");
+    }
+
+    function startPrivateChat() {
+        const privateUsername = document.getElementById("private-username").value.trim();
+
+        if (!privateUsername) {
+            alert("Podaj username");
+            return;
+        }
+
+        subscribeRoom("private-" + privateUsername);
+    }
+
+    async function uploadAndSend() {
+        alert("Upload plików wymaga dopasowania endpointu backendu.");
+    }
+
+    window.onload = function () {
+        if (token) {
+            document.getElementById("auth-panel").style.display = "none";
+            connectWebSocket();
+            loadPublicRooms();
+        }
+    };
 </script>
+
 </body>
 </html>
