@@ -504,6 +504,7 @@
                     attachmentUrl: attachmentUrl
                 })
             );
+            setTimeout(() => loadRoomMessages(currentRoomId), 250);
         }
 
         input.value = "";

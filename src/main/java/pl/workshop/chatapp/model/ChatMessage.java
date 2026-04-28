@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 
 @Data
 public class ChatMessage {
+    private Long id;
     private MessageType type = MessageType.CHAT;
     private String content;
     private String sender;
