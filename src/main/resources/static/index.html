@@ -335,6 +335,27 @@
         return room?.name || room?.roomName || room?.id || null;
     }
 
+    function upsertRoomJoinButton(roomName, prepend = false) {
+        const list = document.getElementById("room-list");
+        const existingButtons = Array.from(list.querySelectorAll("button"));
+        const alreadyVisible = existingButtons.some(btn => btn.dataset.roomName === roomName);
+
+        if (alreadyVisible) {
+            return;
+        }
+
+        const btn = document.createElement("button");
+        btn.dataset.roomName = roomName;
+        btn.textContent = `Join ${roomName}`;
+        btn.onclick = () => subscribeRoom(roomName);
+
+        if (prepend) {
+            list.prepend(btn);
+        } else {
+            list.appendChild(btn);
+        }
+    }
+
     async function loadPublicRooms(selectedRoomName = null) {
         if (!token) {
             return;
@@ -346,6 +367,11 @@
 
         if (!response.ok) {
             console.error(await response.text());
+            if (selectedRoomName) {
+                upsertRoomJoinButton(selectedRoomName, true);
+                document.getElementById("room-list-empty").textContent = "";
+                setInfo(`Room "${selectedRoomName}" is available via Quick Join.`);
+            }
             return;
         }
 
@@ -364,10 +390,7 @@
             if (!roomName) {
                 return;
             }
-            const btn = document.createElement("button");
-            btn.textContent = `Join ${roomName}`;
-            btn.onclick = () => subscribeRoom(roomName);
-            list.appendChild(btn);
+            upsertRoomJoinButton(roomName);
         });
 
         if (selectedRoomName) {
@@ -376,10 +399,7 @@
                 setInfo(MESSAGES.createdRoomVisible(selectedRoomName));
                 subscribeRoom(selectedRoomName);
             } else {
-                const fallbackRoom = document.createElement("button");
-                fallbackRoom.textContent = `Join ${selectedRoomName}`;
-                fallbackRoom.onclick = () => subscribeRoom(selectedRoomName);
-                list.prepend(fallbackRoom);
+                upsertRoomJoinButton(selectedRoomName, true);
                 roomEmptyInfo.textContent = "";
 
                 setInfo(MESSAGES.createdRoomQuickJoin(selectedRoomName));
@@ -412,6 +432,8 @@
 
             if (translatedMessage === "A room with this name already exists.") {
                 await loadPublicRooms(name);
+                upsertRoomJoinButton(name, true);
+                document.getElementById("room-list-empty").textContent = "";
                 alert(MESSAGES.roomAlreadyExists(name));
                 return;
             }
