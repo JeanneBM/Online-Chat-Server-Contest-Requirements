@@ -41,6 +41,7 @@
             <div id="room-list"></div>
         </div>
         <div id="active-room-label" style="margin-top:8px;font-size:0.9em;color:#007bff;">Active room: public</div>
+        <button onclick="goToPublicRoom()" style="margin-top:6px;">Back to public</button>
         <div class="notification-box">
             <strong>Unread</strong><br>
             Private <span id="unread-private" class="badge">0</span><br>
@@ -96,6 +97,7 @@
     let currentRoom = "public";
     let currentRoomId = null;
     let pendingRoomToJoin = null;
+    let subscribedRoomId = null;
     let latestRooms = [];
     let unreadPollInterval = null;
     let presencePingInterval = null;
@@ -306,7 +308,58 @@
         return room?.id ?? null;
     }
 
-    function subscribeRoom(roomName, roomId = null) {
+    async function ensureRoomMembership(roomName, roomId) {
+        if (!token || !roomId || roomName.startsWith("private-")) {
+            return;
+        }
+
+        const room = latestRooms.find(r => String(r.id) === String(roomId) || normalizeRoomName(r) === roomName);
+        if (room?.type && room.type !== "PUBLIC") {
+            return;
+        }
+
+        await fetch(`/api/rooms/${roomId}/join`, {
+            method: "POST",
+            headers: authHeaders()
+        });
+    }
+
+    function renderMessageEntry(msg) {
+        const div = document.createElement("div");
+        div.className = "message";
+        div.innerHTML = `<strong>${msg.sender || "unknown"}:</strong> ${msg.content || ""}`;
+
+        if (msg.attachmentUrl) {
+            div.innerHTML += `<br><a href="${msg.attachmentUrl}" target="_blank">📎 File</a>`;
+        }
+
+        const delBtn = document.createElement("span");
+        delBtn.className = "delete-btn";
+        delBtn.innerHTML = "🗑";
+        delBtn.onclick = () => deleteMessage(msg.id || 0);
+        div.appendChild(delBtn);
+
+        document.getElementById("messages").appendChild(div);
+    }
+
+    async function loadRoomMessages(roomId) {
+        if (!token || !roomId) {
+            return;
+        }
+
+        const response = await fetch(`/api/messages/room/${roomId}`, { headers: authHeaders() });
+        if (!response.ok) {
+            return;
+        }
+
+        const messages = await response.json();
+        const box = document.getElementById("messages");
+        box.innerHTML = "";
+        messages.forEach(renderMessageEntry);
+        box.scrollTop = box.scrollHeight;
+    }
+
+    async function subscribeRoom(roomName, roomId = null) {
         currentRoom = roomName;
         currentRoomId = roomId ?? resolveRoomId(roomName) ?? roomName;
         document.getElementById("active-room-label").textContent = `Active room: ${roomName}`;
@@ -323,13 +376,16 @@
             return;
         }
 
+        await ensureRoomMembership(roomName, currentRoomId);
+
         if (roomSubscription) {
             roomSubscription.unsubscribe();
         }
 
         roomSubscription = stompClient.subscribe("/topic/room/" + currentRoomId, onMessageReceived);
-        document.getElementById("messages").innerHTML = "";
+        subscribedRoomId = currentRoomId;
         setInfo(MESSAGES.activeRoom(roomName));
+        await loadRoomMessages(currentRoomId);
         if (currentRoom !== "public" && !currentRoom.startsWith("private-")) {
             markRoomRead(currentRoom);
         }
@@ -338,23 +394,7 @@
 
     function onMessageReceived(payload) {
         const msg = JSON.parse(payload.body);
-
-        const div = document.createElement("div");
-        div.className = "message";
-        div.innerHTML = `<strong>${msg.sender}:</strong> ${msg.content || ""}`;
-
-        if (msg.attachmentUrl) {
-            div.innerHTML += `<br><a href="${msg.attachmentUrl}" target="_blank">📎 File</a>`;
-        }
-
-        const delBtn = document.createElement("span");
-        delBtn.className = "delete-btn";
-        delBtn.innerHTML = "🗑";
-        delBtn.onclick = () => deleteMessage(msg.id || 0);
-
-        div.appendChild(delBtn);
-
-        document.getElementById("messages").appendChild(div);
+        renderMessageEntry(msg);
         document.getElementById("messages").scrollTop = 999999;
         refreshUnreadCounts();
     }
@@ -466,8 +506,8 @@
         setInfo(MESSAGES.roomListLoaded(rooms.length));
 
         if (stompClient && stompClient.connected && resolvedCurrentRoomId
-            && (!roomSubscription || String(resolvedCurrentRoomId) !== String(currentRoom))) {
-            subscribeRoom(currentRoom, resolvedCurrentRoomId);
+            && (!roomSubscription || String(resolvedCurrentRoomId) !== String(subscribedRoomId))) {
+            await subscribeRoom(currentRoom, resolvedCurrentRoomId);
         }
 
         const list = document.getElementById("room-list");
@@ -489,7 +529,7 @@
             const exists = rooms.some(room => normalizeRoomName(room) === selectedRoomName);
             if (exists) {
                 setInfo(MESSAGES.createdRoomVisible(selectedRoomName));
-                subscribeRoom(selectedRoomName);
+                await subscribeRoom(selectedRoomName);
             } else {
                 const selectedRoom = rooms.find(room => normalizeRoomName(room) === selectedRoomName);
                 upsertRoomJoinButton(selectedRoomName, selectedRoom?.id ?? null, true);
@@ -579,6 +619,11 @@
         subscribeRoom("private-" + privateUsername);
         markPrivateRead(privateUsername);
         refreshUnreadCounts();
+    }
+
+    function goToPublicRoom() {
+        const publicRoom = latestRooms.find(room => normalizeRoomName(room) === "public");
+        subscribeRoom("public", publicRoom?.id ?? null);
     }
 
     async function uploadAndSend() {
