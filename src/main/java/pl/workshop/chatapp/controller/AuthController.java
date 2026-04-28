@@ -4,8 +4,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import pl.workshop.chatapp.model.ActiveSession;
 import pl.workshop.chatapp.model.User;
-import pl.workshop.chatapp.model.UserSession;
 import pl.workshop.chatapp.repository.UserRepository;
 import pl.workshop.chatapp.security.JwtService;
 import pl.workshop.chatapp.service.PasswordService;
@@ -70,7 +70,7 @@ public class AuthController {
         user.setPassword(passwordEncoder.encode(password));
         userRepository.save(user);
 
-        UserSession session = sessionService.createLoginSession(
+        ActiveSession session = sessionService.createLoginSession(
                 user.getEmail(),
                 httpRequest.getRemoteAddr(),
                 httpRequest.getHeader("User-Agent")
@@ -112,7 +112,7 @@ public class AuthController {
             return ResponseEntity.badRequest().body("Nieprawidłowy email/username lub hasło");
         }
 
-        UserSession session = sessionService.createLoginSession(
+        ActiveSession session = sessionService.createLoginSession(
                 user.getEmail(),
                 httpRequest.getRemoteAddr(),
                 httpRequest.getHeader("User-Agent")

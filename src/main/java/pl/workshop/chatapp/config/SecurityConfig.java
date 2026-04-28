@@ -40,7 +40,10 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/reset-token", "/api/auth/reset-password").permitAll()
+                        .requestMatchers(
+                                "/api/auth/register", "/api/auth/login", "/api/auth/reset-token", "/api/auth/reset-password",
+                                "/auth/register", "/auth/login", "/auth/reset-token", "/auth/reset-password"
+                        ).permitAll()
                         .requestMatchers("/ws-chat/**", "/ws-chat", "/ws/**", "/ws", "/sockjs-node/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/", "/index.html", "/**/*.js", "/**/*.css", "/**/*.png", "/**/*.jpg", "/**/*.jpeg").permitAll()
                         .anyRequest().authenticated()
