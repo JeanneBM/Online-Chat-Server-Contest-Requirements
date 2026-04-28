@@ -219,6 +219,7 @@
 
         stompClient.subscribe("/topic/room/" + roomName, onMessageReceived);
         document.getElementById("messages").innerHTML = "";
+        setInfo(`Aktywny pokój: ${roomName}`);
     }
 
     function onMessageReceived(payload) {
