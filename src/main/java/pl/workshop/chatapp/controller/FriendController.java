@@ -81,6 +81,18 @@ public class FriendController {
         return friendService.getPendingRequests(user.getId());
     }
 
+    @GetMapping("/requests/sent")
+    public List<Map<String, Object>> getSentPendingRequests(Principal principal) {
+        User user = userRepository.findByEmail(principal.getName()).orElseThrow();
+        return friendService.getSentPendingRequests(user.getId())
+                .stream()
+                .map(request -> Map.<String, Object>of(
+                        "id", request.getId(),
+                        "username", request.getReceiver().getUsername()
+                ))
+                .toList();
+    }
+
     @DeleteMapping("/{friendId}")
     public ResponseEntity<?> removeFriend(@PathVariable Long friendId, Principal principal) {
         User user = userRepository.findByEmail(principal.getName()).orElseThrow();
