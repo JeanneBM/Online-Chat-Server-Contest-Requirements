@@ -36,27 +36,13 @@ public class RoomController {
     }
 
     @PostMapping
-    public ResponseEntity<?> createRoom(@RequestBody Room roomReq, Principal principal) {
-        User owner = userRepository.findByEmail(principal.getName()).orElseThrow();
+    public ResponseEntity<Room> createRoom(@RequestBody Room roomReq, Principal principal) {
+        return ResponseEntity.ok(roomService.createRoom(roomReq, principal.getName()));
+    }
 
-        if (roomReq.getName() == null || roomReq.getName().isBlank()) {
-            return ResponseEntity.badRequest().body("Nazwa pokoju jest wymagana");
-        }
-
-        if (roomRepository.existsByName(roomReq.getName())) {
-            return ResponseEntity.badRequest().body("Pokój o tej nazwie już istnieje");
-        }
-
-        Room room = new Room();
-        room.setName(roomReq.getName().trim());
-        room.setDescription(roomReq.getDescription());
-        room.setType(roomReq.getType() != null ? roomReq.getType() : RoomType.PUBLIC);
-        room.setOwner(owner);
-        room.getMembers().add(owner);
-        room.getAdmins().add(owner);
-
-        Room saved = roomRepository.save(room);
-        return ResponseEntity.ok(saved);
+    @GetMapping("/my")
+    public ResponseEntity<List<Room>> getMyRooms(Principal principal) {
+        return ResponseEntity.ok(roomService.getRoomsForUser(principal.getName()));
     }
 
     @GetMapping("/public")
@@ -126,6 +112,20 @@ public class RoomController {
                                        @RequestParam String username,
                                        Principal principal) {
         return ResponseEntity.ok(roomService.unbanUser(roomId, username, principal.getName()));
+    }
+
+    @PostMapping("/{roomId}/admins")
+    public ResponseEntity<?> addAdmin(@PathVariable Long roomId,
+                                      @RequestParam String username,
+                                      Principal principal) {
+        return ResponseEntity.ok(roomService.addAdmin(roomId, username, principal.getName()));
+    }
+
+    @DeleteMapping("/{roomId}/admins")
+    public ResponseEntity<?> removeAdmin(@PathVariable Long roomId,
+                                         @RequestParam String username,
+                                         Principal principal) {
+        return ResponseEntity.ok(roomService.removeAdmin(roomId, username, principal.getName()));
     }
 
     @PostMapping("/{roomId}/invite")

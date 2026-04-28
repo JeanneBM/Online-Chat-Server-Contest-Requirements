@@ -20,8 +20,8 @@ public class Attachment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(optional = false)
-    @JoinColumn(name = "message_id", nullable = false)
+    @ManyToOne
+    @JoinColumn(name = "message_id")
     private Message message;
 
     @ManyToOne(optional = false)
