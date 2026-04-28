@@ -2,8 +2,8 @@ package pl.workshop.chatapp.controller;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import pl.workshop.chatapp.model.ActiveSession;
 import pl.workshop.chatapp.model.User;
-import pl.workshop.chatapp.model.UserSession;
 import pl.workshop.chatapp.repository.UserRepository;
 import pl.workshop.chatapp.service.SessionService;
 import pl.workshop.chatapp.service.UserService;
@@ -33,7 +33,7 @@ public class UserController {
     }
 
     @GetMapping("/sessions")
-    public List<UserSession> getSessions(Principal principal) {
+    public List<ActiveSession> getSessions(Principal principal) {
         return sessionService.getActiveSessions(principal.getName());
     }
 

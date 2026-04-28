@@ -44,4 +44,7 @@ public class Room {
                joinColumns = @JoinColumn(name = "room_id"),
                inverseJoinColumns = @JoinColumn(name = "user_id"))
     private Set<User> bannedUsers = new HashSet<>();
+
+    @OneToMany(mappedBy = "room", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<RoomMembership> memberships = new HashSet<>();
 }

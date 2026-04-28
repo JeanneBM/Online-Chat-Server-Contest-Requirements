@@ -3,11 +3,12 @@ package pl.workshop.chatapp.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import pl.workshop.chatapp.model.ActiveSession;
 import pl.workshop.chatapp.model.PresenceStatus;
 import pl.workshop.chatapp.model.User;
-import pl.workshop.chatapp.model.UserSession;
+import pl.workshop.chatapp.repository.ActiveSessionRepository;
 import pl.workshop.chatapp.repository.UserRepository;
-import pl.workshop.chatapp.repository.UserSessionRepository;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -15,15 +16,16 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class SessionService {
 
-    private final UserSessionRepository sessionRepo;
+    private final ActiveSessionRepository sessionRepo;
     private final UserRepository userRepo;
 
-    public UserSession createLoginSession(String email, String ip, String userAgent) {
+    public ActiveSession createLoginSession(String email, String ip, String userAgent) {
         User user = userRepo.findByEmail(email).orElseThrow();
 
-        UserSession session = new UserSession();
+        ActiveSession session = new ActiveSession();
         session.setUser(user);
         session.setSessionId(UUID.randomUUID().toString());
         session.setIpAddress(ip);
@@ -31,7 +33,7 @@ public class SessionService {
         session.setLastActivity(LocalDateTime.now());
         session.setActive(true);
 
-        UserSession saved = sessionRepo.save(session);
+        ActiveSession saved = sessionRepo.save(session);
 
         user.setLastActivity(LocalDateTime.now());
         user.setPresenceStatus(PresenceStatus.ONLINE);
@@ -43,9 +45,9 @@ public class SessionService {
     public void updateActivity(String email, String sessionId, String ip, String userAgent) {
         User user = userRepo.findByEmail(email).orElseThrow();
 
-        UserSession session = sessionRepo.findBySessionIdAndUser(sessionId, user)
+        ActiveSession session = sessionRepo.findBySessionIdAndUser(sessionId, user)
                 .orElseGet(() -> {
-                    UserSession newSession = new UserSession();
+                    ActiveSession newSession = new ActiveSession();
                     newSession.setUser(user);
                     newSession.setSessionId(sessionId);
                     return newSession;
@@ -69,13 +71,13 @@ public class SessionService {
         }
 
         return sessionRepo.findBySessionIdAndUser(sessionId, user)
-                .map(UserSession::isActive)
+                .map(ActiveSession::isActive)
                 .orElse(false);
     }
 
     public void logoutSession(String email, String sessionId) {
         User user = userRepo.findByEmail(email).orElseThrow();
-        UserSession session = sessionRepo.findBySessionIdAndUser(sessionId, user).orElseThrow();
+        ActiveSession session = sessionRepo.findBySessionIdAndUser(sessionId, user).orElseThrow();
 
         session.setActive(false);
         sessionRepo.save(session);
@@ -83,13 +85,13 @@ public class SessionService {
         updatePresenceFromSessions(user);
     }
 
-    public List<UserSession> getActiveSessions(String email) {
+    public List<ActiveSession> getActiveSessions(String email) {
         User user = userRepo.findByEmail(email).orElseThrow();
         return sessionRepo.findByUserAndActiveTrue(user);
     }
 
     private void updatePresenceFromSessions(User user) {
-        List<UserSession> activeSessions = sessionRepo.findByUserAndActiveTrue(user);
+        List<ActiveSession> activeSessions = sessionRepo.findByUserAndActiveTrue(user);
 
         if (activeSessions.isEmpty()) {
             user.setPresenceStatus(PresenceStatus.OFFLINE);
@@ -101,7 +103,7 @@ public class SessionService {
 
             user.setPresenceStatus(anyRecentlyActive ? PresenceStatus.ONLINE : PresenceStatus.AFK);
             user.setLastActivity(activeSessions.stream()
-                    .map(UserSession::getLastActivity)
+                    .map(ActiveSession::getLastActivity)
                     .filter(t -> t != null)
                     .max(LocalDateTime::compareTo)
                     .orElse(LocalDateTime.now()));
@@ -116,7 +118,7 @@ public class SessionService {
         List<User> users = userRepo.findAll();
 
         for (User user : users) {
-            List<UserSession> activeSessions = sessionRepo.findByUserAndActiveTrue(user);
+            List<ActiveSession> activeSessions = sessionRepo.findByUserAndActiveTrue(user);
 
             if (activeSessions.isEmpty()) {
                 user.setPresenceStatus(PresenceStatus.OFFLINE);
