@@ -88,11 +88,34 @@
         friendUsernameRequired: "Enter your friend's username.",
         invitationSent: "Invitation sent.",
         usernameRequired: "Enter a username.",
-        uploadPending: "File upload requires backend endpoint alignment."
+        uploadPending: "File upload requires backend endpoint alignment.",
+        roomAlreadyExists: (roomName) => `Room "${roomName}" already exists. You can join it from the room list.`,
+        roomListLoaded: (count) => `Loaded public rooms: ${count}`
     };
 
     function setInfo(message) {
         document.getElementById("user-info").textContent = message || "";
+    }
+
+    function translateServerMessage(rawMessage) {
+        if (!rawMessage) {
+            return "Unexpected server error.";
+        }
+
+        const message = rawMessage.trim();
+        const lower = message.toLowerCase();
+
+        if (lower.includes("pokój o tej nazwie już istnieje") || lower.includes("pokoj o tej nazwie juz istnieje")) {
+            return "A room with this name already exists.";
+        }
+        if (lower.includes("użytkownik") || lower.includes("uzytkownik")) {
+            return "User-related request failed.";
+        }
+        if (lower.includes("nie znaleziono")) {
+            return "Requested resource was not found.";
+        }
+
+        return message;
     }
 
     async function login() {
@@ -117,7 +140,7 @@
         });
 
         if (!response.ok) {
-            alert(await response.text());
+            alert(translateServerMessage(await response.text()));
             return;
         }
 
@@ -186,7 +209,7 @@
         });
 
         if (!response.ok) {
-            alert(await response.text());
+            alert(translateServerMessage(await response.text()));
             return;
         }
 
@@ -348,6 +371,7 @@
 
         const rooms = await response.json();
         latestRooms = rooms;
+        setInfo(MESSAGES.roomListLoaded(rooms.length));
 
         const list = document.getElementById("room-list");
         list.innerHTML = "";
@@ -412,7 +436,16 @@
         });
 
         if (!response.ok) {
-            alert(await response.text());
+            const serverMessage = await response.text();
+            const translatedMessage = translateServerMessage(serverMessage);
+
+            if (translatedMessage === "A room with this name already exists.") {
+                await loadPublicRooms(name);
+                alert(MESSAGES.roomAlreadyExists(name));
+                return;
+            }
+
+            alert(translatedMessage);
             return;
         }
 
@@ -440,7 +473,7 @@
         });
 
         if (!response.ok) {
-            alert(await response.text());
+            alert(translateServerMessage(await response.text()));
             return;
         }
 
