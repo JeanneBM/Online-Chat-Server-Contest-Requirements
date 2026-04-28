@@ -1,7 +1,7 @@
 package pl.workshop.chatapp.service;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,7 +24,7 @@ public class SessionService {
 
     private final ActiveSessionRepository sessionRepo;
     private final UserRepository userRepo;
-    private final SimpMessagingTemplate messagingTemplate;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ActiveSession createLoginSession(String email, String ip, String userAgent) {
         User user = userRepo.findByEmail(email).orElseThrow();
@@ -156,7 +156,10 @@ public class SessionService {
         userRepo.save(user);
 
         if (oldStatus != newStatus) {
-            broadcastPresence(user);
+            eventPublisher.publishEvent(new PresenceStatusChangedEvent(
+                    user.getUsername(),
+                    user.getPresenceStatus() != null ? user.getPresenceStatus() : PresenceStatus.OFFLINE
+            ));
         }
     }
 
