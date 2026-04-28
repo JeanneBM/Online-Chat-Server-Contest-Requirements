@@ -28,6 +28,38 @@ public class RoomService {
     private final FileService fileService;
     private final RoomBanRepository roomBanRepository;
 
+    public Room createRoom(Room roomReq, String ownerEmail) {
+        User owner = findUserByEmail(ownerEmail);
+
+        if (roomReq == null || roomReq.getName() == null || roomReq.getName().isBlank()) {
+            throw new IllegalArgumentException("Nazwa pokoju jest wymagana");
+        }
+
+        String roomName = roomReq.getName().trim();
+        if (roomRepository.existsByName(roomName)) {
+            throw new IllegalArgumentException("Pokój o tej nazwie już istnieje");
+        }
+
+        Room room = new Room();
+        room.setName(roomName);
+        room.setDescription(roomReq.getDescription());
+        room.setType(roomReq.getType() != null ? roomReq.getType() : RoomType.PUBLIC);
+        room.setPrivate(room.getType() == RoomType.PRIVATE);
+        room.setOwner(owner);
+        room.getMembers().add(owner);
+        room.getAdmins().add(owner);
+
+        return roomRepository.save(room);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Room> getRoomsForUser(String email) {
+        User user = findUserByEmail(email);
+        return roomRepository.findAll().stream()
+                .filter(room -> isMember(room, user))
+                .toList();
+    }
+
     public List<Room> getPublicRooms(String search) {
         List<Room> publicRooms = roomRepository.findByType(RoomType.PUBLIC);
 
@@ -181,6 +213,45 @@ public class RoomService {
 
         room.getBannedUsers().remove(targetUser);
         roomBanRepository.deleteByRoomAndBannedUser(room, targetUser);
+        return roomRepository.save(room);
+    }
+
+    public Room addAdmin(Long roomId, String targetUsername, String actingEmail) {
+        Room room = roomRepository.findById(roomId).orElseThrow();
+        User actingUser = findUserByEmail(actingEmail);
+        User targetUser = findUserByUsername(targetUsername);
+
+        if (!room.getOwner().equals(actingUser)) {
+            throw new SecurityException("Tylko owner może nadawać rolę ADMIN");
+        }
+
+        if (room.getOwner().equals(targetUser)) {
+            return room;
+        }
+
+        if (room.getBannedUsers().contains(targetUser)) {
+            throw new IllegalStateException("Nie można nadać ADMIN użytkownikowi zbanowanemu");
+        }
+
+        room.getMembers().add(targetUser);
+        room.getAdmins().add(targetUser);
+        return roomRepository.save(room);
+    }
+
+    public Room removeAdmin(Long roomId, String targetUsername, String actingEmail) {
+        Room room = roomRepository.findById(roomId).orElseThrow();
+        User actingUser = findUserByEmail(actingEmail);
+        User targetUser = findUserByUsername(targetUsername);
+
+        if (!room.getOwner().equals(actingUser)) {
+            throw new SecurityException("Tylko owner może usuwać rolę ADMIN");
+        }
+
+        if (room.getOwner().equals(targetUser)) {
+            throw new IllegalStateException("Nie można usunąć OWNER z roli OWNER");
+        }
+
+        room.getAdmins().remove(targetUser);
         return roomRepository.save(room);
     }
 
