@@ -116,7 +116,6 @@
         invitationSent: "Invitation sent.",
         usernameRequired: "Enter a username.",
         uploadPending: "File upload requires backend endpoint alignment.",
-        roomAlreadyExists: (roomName) => `Room "${roomName}" already exists. You can join it from the room list.`,
         roomListLoaded: (count) => `Loaded public rooms: ${count}`
     };
 
@@ -568,7 +567,6 @@
                 const existingRoom = latestRooms.find(room => normalizeRoomName(room) === name);
                 upsertRoomJoinButton(name, existingRoom?.id ?? null, true);
                 document.getElementById("room-list-empty").textContent = "";
-                alert(MESSAGES.roomAlreadyExists(name));
                 return;
             }
 
