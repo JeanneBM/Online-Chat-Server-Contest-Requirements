@@ -162,7 +162,18 @@
             return "Unexpected server error.";
         }
 
-        const message = rawMessage.trim();
+        let message = rawMessage.trim();
+        if (message.startsWith("{") && message.endsWith("}")) {
+            try {
+                const parsed = JSON.parse(message);
+                if (parsed && typeof parsed.error === "string" && parsed.error.trim()) {
+                    message = parsed.error.trim();
+                }
+            } catch (error) {
+                console.warn("Could not parse error payload:", error);
+            }
+        }
+
         const lower = message.toLowerCase();
 
         if (lower.includes("pokój o tej nazwie już istnieje") || lower.includes("pokoj o tej nazwie juz istnieje")) {
