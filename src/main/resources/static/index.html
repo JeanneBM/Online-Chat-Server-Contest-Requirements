@@ -25,7 +25,7 @@
 
 <div class="main">
     <div class="sidebar">
-        <h4>Public Rooms (Pokoje publiczne)</h4>
+        <h4>Public Rooms</h4>
         <button onclick="loadPublicRooms()">Refresh</button>
         <button onclick="logout()" style="margin-left:8px;background:#dc3545;color:white;">Logout</button>
         <div id="room-count" style="margin-top:8px;font-size:0.9em;color:#666;"></div>
@@ -37,13 +37,13 @@
         <button onclick="createRoom()">Create</button>
 
         <hr>
-        <h4>Friends (Znajomi)</h4>
+        <h4>Friends</h4>
         <input id="friend-username" placeholder="Username">
         <button onclick="sendFriendRequest()">Invite</button>
         <div id="friends-list"></div>
 
         <hr>
-        <h4>Direct Chat (Czat 1:1)</h4>
+        <h4>Direct Chat 1:1</h4>
         <input id="private-username" placeholder="Username">
         <button onclick="startPrivateChat()">Start</button>
     </div>
@@ -74,6 +74,22 @@
     let stompClient = null;
     let currentRoom = "public";
     let latestRooms = [];
+    const MESSAGES = {
+        authRequired: "Username and password are required.",
+        signedInAs: (name) => `Signed in as: ${name}`,
+        logoutSuccess: "Logged out successfully.",
+        accountCreated: (name) => `Account created. Signed in as: ${name}`,
+        activeRoom: (roomName) => `Active room: ${roomName}`,
+        websocketMissing: "No WebSocket connection.",
+        noPublicRooms: "No public rooms available.",
+        createdRoomVisible: (roomName) => `Room \"${roomName}\" created and ready to join.`,
+        createdRoomQuickJoin: (roomName) => `Room \"${roomName}\" created. Quick Join button added.`,
+        roomNameRequired: "Enter a room name.",
+        friendUsernameRequired: "Enter your friend's username.",
+        invitationSent: "Invitation sent.",
+        usernameRequired: "Enter a username.",
+        uploadPending: "File upload requires backend endpoint alignment."
+    };
 
     function setInfo(message) {
         document.getElementById("user-info").textContent = message || "";
@@ -84,7 +100,7 @@
         const password = document.getElementById("password").value;
 
         if (!usernameValue || !password) {
-            alert("Username i hasło są wymagane.");
+            alert(MESSAGES.authRequired);
             return;
         }
 
@@ -114,7 +130,7 @@
         localStorage.setItem("username", username);
 
         document.getElementById("auth-panel").style.display = "none";
-        setInfo("Zalogowano jako: " + username);
+        setInfo(MESSAGES.signedInAs(username));
 
         connectWebSocket();
         loadPublicRooms();
@@ -132,7 +148,7 @@
                 headers: authHeaders()
             });
         } catch (error) {
-            console.error("Błąd logout:", error);
+            console.error("Logout error:", error);
         }
 
         if (stompClient && stompClient.connected) {
@@ -145,7 +161,7 @@
         localStorage.removeItem("username");
         document.getElementById("messages").innerHTML = "";
         document.getElementById("auth-panel").style.display = "flex";
-        setInfo("Wylogowano pomyślnie.");
+        setInfo(MESSAGES.logoutSuccess);
     }
 
     async function register() {
@@ -153,7 +169,7 @@
         const password = document.getElementById("password").value;
 
         if (!usernameValue || !password) {
-            alert("Username i hasło są wymagane.");
+            alert(MESSAGES.authRequired);
             return;
         }
 
@@ -183,7 +199,7 @@
         localStorage.setItem("username", username);
 
         document.getElementById("auth-panel").style.display = "none";
-        setInfo("Konto utworzone. Zalogowano jako: " + username);
+        setInfo(MESSAGES.accountCreated(username));
 
         connectWebSocket();
         loadPublicRooms();
@@ -219,7 +235,7 @@
 
         stompClient.subscribe("/topic/room/" + roomName, onMessageReceived);
         document.getElementById("messages").innerHTML = "";
-        setInfo(`Aktywny pokój: ${roomName}`);
+        setInfo(MESSAGES.activeRoom(roomName));
     }
 
     function onMessageReceived(payload) {
@@ -230,7 +246,7 @@
         div.innerHTML = `<strong>${msg.sender}:</strong> ${msg.content || ""}`;
 
         if (msg.attachmentUrl) {
-            div.innerHTML += `<br><a href="${msg.attachmentUrl}" target="_blank">📎 Plik</a>`;
+            div.innerHTML += `<br><a href="${msg.attachmentUrl}" target="_blank">📎 File</a>`;
         }
 
         const delBtn = document.createElement("span");
@@ -253,7 +269,7 @@
         }
 
         if (!stompClient || !stompClient.connected) {
-            alert("Brak połączenia z WebSocket.");
+            alert(MESSAGES.websocketMissing);
             return;
         }
 
@@ -282,14 +298,36 @@
         );
     }
 
+    function normalizeRoomName(room) {
+        if (typeof room === "string") {
+            return room;
+        }
+
+        return room?.name || room?.roomName || room?.id || null;
+    }
+
     function renderRoomNames(rooms) {
         const roomNames = document.getElementById("room-names");
         roomNames.innerHTML = "";
 
-        rooms.forEach(room => {
-            const name = room.name || room.roomName || room;
+        if (!rooms.length) {
             const li = document.createElement("li");
-            li.textContent = name;
+            li.textContent = MESSAGES.noPublicRooms;
+            roomNames.appendChild(li);
+            return;
+        }
+
+        rooms.forEach(room => {
+            const name = normalizeRoomName(room);
+            if (!name) {
+                return;
+            }
+
+            const li = document.createElement("li");
+            const joinBtn = document.createElement("button");
+            joinBtn.textContent = `Join ${name}`;
+            joinBtn.onclick = () => subscribeRoom(name);
+            li.appendChild(joinBtn);
             roomNames.appendChild(li);
         });
     }
@@ -317,7 +355,10 @@
         renderRoomNames(rooms);
 
         rooms.forEach(room => {
-            const roomName = room.name || room.roomName || room;
+            const roomName = normalizeRoomName(room);
+            if (!roomName) {
+                return;
+            }
             const btn = document.createElement("button");
             btn.textContent = roomName;
             btn.style.display = "block";
@@ -327,12 +368,27 @@
         });
 
         if (selectedRoomName) {
-            const exists = rooms.some(room => (room.name || room.roomName || room) === selectedRoomName);
-            setInfo(
-                exists
-                    ? `Dodano pokój "${selectedRoomName}". Lista pokoi została odświeżona (${rooms.length}).`
-                    : "Pokój został dodany, ale nie jest widoczny na publicznej liście."
-            );
+            const exists = rooms.some(room => normalizeRoomName(room) === selectedRoomName);
+            if (exists) {
+                setInfo(MESSAGES.createdRoomVisible(selectedRoomName));
+                subscribeRoom(selectedRoomName);
+            } else {
+                const fallbackRoom = document.createElement("button");
+                fallbackRoom.textContent = selectedRoomName;
+                fallbackRoom.style.display = "block";
+                fallbackRoom.style.margin = "5px 0";
+                fallbackRoom.onclick = () => subscribeRoom(selectedRoomName);
+                list.prepend(fallbackRoom);
+
+                const fallbackLi = document.createElement("li");
+                const fallbackJoin = document.createElement("button");
+                fallbackJoin.textContent = `Join ${selectedRoomName}`;
+                fallbackJoin.onclick = () => subscribeRoom(selectedRoomName);
+                fallbackLi.appendChild(fallbackJoin);
+                document.getElementById("room-names").prepend(fallbackLi);
+
+                setInfo(MESSAGES.createdRoomQuickJoin(selectedRoomName));
+            }
         }
     }
 
@@ -340,7 +396,7 @@
         const name = document.getElementById("new-room-name").value.trim();
 
         if (!name) {
-            alert("Podaj nazwę pokoju.");
+            alert(MESSAGES.roomNameRequired);
             return;
         }
 
@@ -368,7 +424,7 @@
         const friendUsername = document.getElementById("friend-username").value.trim();
 
         if (!friendUsername) {
-            alert("Podaj username znajomego.");
+            alert(MESSAGES.friendUsernameRequired);
             return;
         }
 
@@ -388,14 +444,14 @@
             return;
         }
 
-        alert("Wysłano zaproszenie.");
+        alert(MESSAGES.invitationSent);
     }
 
     function startPrivateChat() {
         const privateUsername = document.getElementById("private-username").value.trim();
 
         if (!privateUsername) {
-            alert("Podaj username.");
+            alert(MESSAGES.usernameRequired);
             return;
         }
 
@@ -403,7 +459,7 @@
     }
 
     async function uploadAndSend() {
-        alert("Upload plików wymaga dopasowania endpointu backendu.");
+        alert(MESSAGES.uploadPending);
     }
 
     window.onload = function () {
