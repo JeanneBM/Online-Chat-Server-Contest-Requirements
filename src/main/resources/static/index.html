@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>Online Chat - FINAL</title>
@@ -25,34 +25,36 @@
 
 <div class="main">
     <div class="sidebar">
-        <h4>Publiczne pokoje</h4>
-        <button onclick="loadPublicRooms()">Odśwież</button>
-        <button onclick="logout()" style="margin-left:8px;background:#dc3545;color:white;">Wyloguj</button>
+        <h4>Public Rooms</h4>
+        <button onclick="loadPublicRooms()">Refresh</button>
+        <button onclick="logout()" style="margin-left:8px;background:#dc3545;color:white;">Logout</button>
+        <div id="room-count" style="margin-top:8px;font-size:0.9em;color:#666;"></div>
         <div id="room-list"></div>
+        <ul id="room-names" style="padding-left:18px;margin-top:10px;"></ul>
 
         <hr>
-        <input id="new-room-name" placeholder="Nazwa pokoju">
-        <button onclick="createRoom()">Utwórz</button>
+        <input id="new-room-name" placeholder="Room name">
+        <button onclick="createRoom()">Create</button>
 
         <hr>
-        <h4>Znajomi</h4>
+        <h4>Friends</h4>
         <input id="friend-username" placeholder="Username">
-        <button onclick="sendFriendRequest()">Zaproszenie</button>
+        <button onclick="sendFriendRequest()">Invite</button>
         <div id="friends-list"></div>
 
         <hr>
-        <h4>Czat 1:1</h4>
+        <h4>Direct Chat 1:1</h4>
         <input id="private-username" placeholder="Username">
-        <button onclick="startPrivateChat()">Rozpocznij</button>
+        <button onclick="startPrivateChat()">Start</button>
     </div>
 
     <div class="chat-area">
         <div class="messages" id="messages"></div>
         <div class="input-area">
-            <input id="message-input" placeholder="Napisz wiadomość..." style="flex:1">
+            <input id="message-input" placeholder="Type a message..." style="flex:1">
             <input type="file" id="file-input" style="display:none" onchange="uploadAndSend()">
             <button onclick="document.getElementById('file-input').click()">📎</button>
-            <button onclick="sendMessage()">Wyślij</button>
+            <button onclick="sendMessage()">Send</button>
         </div>
     </div>
 </div>
@@ -60,9 +62,10 @@
 <div id="auth-panel" style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);color:white;display:flex;align-items:center;justify-content:center;flex-direction:column;z-index:1000;">
     <h2>Online Chat</h2>
     <input id="username" placeholder="Username" value="testuser" style="margin:8px;padding:12px;width:300px;"><br>
-    <input id="password" type="password" placeholder="Hasło" value="test123" style="margin:8px;padding:12px;width:300px;"><br>
-    <button onclick="login()" style="margin:8px;padding:12px 30px;width:300px;">Zaloguj</button>
-    <button onclick="register()" style="margin:8px;padding:12px 30px;width:300px;background:#28a745;">Zarejestruj</button>
+    <input id="password" type="password" placeholder="Password" value="test123" style="margin:8px;padding:12px;width:300px;"><br>
+    <button onclick="login()" style="margin:8px;padding:12px 30px;width:300px;">Sign In</button>
+    <button onclick="register()" style="margin:8px;padding:12px 30px;width:300px;background:#28a745;">Register</button>
+    <div id="user-info" style="margin-top:12px;font-size:14px;opacity:0.9;"></div>
 </div>
 
 <script>
@@ -70,13 +73,18 @@
     let username = localStorage.getItem("username");
     let stompClient = null;
     let currentRoom = "public";
+    let latestRooms = [];
+
+    function setInfo(message) {
+        document.getElementById("user-info").textContent = message || "";
+    }
 
     async function login() {
         const usernameValue = document.getElementById("username").value.trim();
         const password = document.getElementById("password").value;
 
         if (!usernameValue || !password) {
-            alert("Username i hasło są wymagane");
+            alert("Username i hasło są wymagane.");
             return;
         }
 
@@ -106,6 +114,7 @@
         localStorage.setItem("username", username);
 
         document.getElementById("auth-panel").style.display = "none";
+        setInfo("Zalogowano jako: " + username);
 
         connectWebSocket();
         loadPublicRooms();
@@ -136,6 +145,7 @@
         localStorage.removeItem("username");
         document.getElementById("messages").innerHTML = "";
         document.getElementById("auth-panel").style.display = "flex";
+        setInfo("Wylogowano pomyślnie.");
     }
 
     async function register() {
@@ -143,7 +153,7 @@
         const password = document.getElementById("password").value;
 
         if (!usernameValue || !password) {
-            alert("Username i hasło są wymagane");
+            alert("Username i hasło są wymagane.");
             return;
         }
 
@@ -173,6 +183,7 @@
         localStorage.setItem("username", username);
 
         document.getElementById("auth-panel").style.display = "none";
+        setInfo("Konto utworzone. Zalogowano jako: " + username);
 
         connectWebSocket();
         loadPublicRooms();
@@ -208,6 +219,7 @@
 
         stompClient.subscribe("/topic/room/" + roomName, onMessageReceived);
         document.getElementById("messages").innerHTML = "";
+        setInfo(`Aktywny pokój: ${roomName}`);
     }
 
     function onMessageReceived(payload) {
@@ -241,7 +253,7 @@
         }
 
         if (!stompClient || !stompClient.connected) {
-            alert("Brak połączenia z WebSocket");
+            alert("Brak połączenia z WebSocket.");
             return;
         }
 
@@ -270,7 +282,41 @@
         );
     }
 
-    async function loadPublicRooms() {
+    function normalizeRoomName(room) {
+        if (typeof room === "string") {
+            return room;
+        }
+
+        return room?.name || room?.roomName || room?.id || null;
+    }
+
+    function renderRoomNames(rooms) {
+        const roomNames = document.getElementById("room-names");
+        roomNames.innerHTML = "";
+
+        if (!rooms.length) {
+            const li = document.createElement("li");
+            li.textContent = "No public rooms available";
+            roomNames.appendChild(li);
+            return;
+        }
+
+        rooms.forEach(room => {
+            const name = normalizeRoomName(room);
+            if (!name) {
+                return;
+            }
+
+            const li = document.createElement("li");
+            const joinBtn = document.createElement("button");
+            joinBtn.textContent = `Join ${name}`;
+            joinBtn.onclick = () => subscribeRoom(name);
+            li.appendChild(joinBtn);
+            roomNames.appendChild(li);
+        });
+    }
+
+    async function loadPublicRooms(selectedRoomName = null) {
         if (!token) {
             return;
         }
@@ -285,24 +331,56 @@
         }
 
         const rooms = await response.json();
+        latestRooms = rooms;
+
         const list = document.getElementById("room-list");
         list.innerHTML = "";
+        document.getElementById("room-count").textContent = "Rooms visible: " + rooms.length;
+        renderRoomNames(rooms);
 
         rooms.forEach(room => {
+            const roomName = normalizeRoomName(room);
+            if (!roomName) {
+                return;
+            }
             const btn = document.createElement("button");
-            btn.textContent = room.name || room.roomName || room;
+            btn.textContent = roomName;
             btn.style.display = "block";
             btn.style.margin = "5px 0";
             btn.onclick = () => subscribeRoom(btn.textContent);
             list.appendChild(btn);
         });
+
+        if (selectedRoomName) {
+            const exists = rooms.some(room => normalizeRoomName(room) === selectedRoomName);
+            if (exists) {
+                setInfo(`Dodano pokój "${selectedRoomName}". Możesz go od razu wybrać z listy.`);
+                subscribeRoom(selectedRoomName);
+            } else {
+                const fallbackRoom = document.createElement("button");
+                fallbackRoom.textContent = selectedRoomName;
+                fallbackRoom.style.display = "block";
+                fallbackRoom.style.margin = "5px 0";
+                fallbackRoom.onclick = () => subscribeRoom(selectedRoomName);
+                list.prepend(fallbackRoom);
+
+                const fallbackLi = document.createElement("li");
+                const fallbackJoin = document.createElement("button");
+                fallbackJoin.textContent = `Join ${selectedRoomName}`;
+                fallbackJoin.onclick = () => subscribeRoom(selectedRoomName);
+                fallbackLi.appendChild(fallbackJoin);
+                document.getElementById("room-names").prepend(fallbackLi);
+
+                setInfo(`Pokój "${selectedRoomName}" utworzony. Dodałem szybki przycisk do wejścia.`);
+            }
+        }
     }
 
     async function createRoom() {
         const name = document.getElementById("new-room-name").value.trim();
 
         if (!name) {
-            alert("Podaj nazwę pokoju");
+            alert("Podaj nazwę pokoju.");
             return;
         }
 
@@ -323,14 +401,14 @@
         }
 
         document.getElementById("new-room-name").value = "";
-        loadPublicRooms();
+        await loadPublicRooms(name);
     }
 
     async function sendFriendRequest() {
         const friendUsername = document.getElementById("friend-username").value.trim();
 
         if (!friendUsername) {
-            alert("Podaj username znajomego");
+            alert("Podaj username znajomego.");
             return;
         }
 
@@ -350,14 +428,14 @@
             return;
         }
 
-        alert("Wysłano zaproszenie");
+        alert("Wysłano zaproszenie.");
     }
 
     function startPrivateChat() {
         const privateUsername = document.getElementById("private-username").value.trim();
 
         if (!privateUsername) {
-            alert("Podaj username");
+            alert("Podaj username.");
             return;
         }
 
