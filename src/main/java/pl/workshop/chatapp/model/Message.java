@@ -47,12 +47,16 @@ public class Message {
 
     private String attachmentUrl;
 
-    private Long replyToId;
 
     private LocalDateTime readAt;
 
     @OneToMany(mappedBy = "message", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<Attachment> attachments = new HashSet<>();
+
+    public Long getReplyToId() {
+        return replyTo != null ? replyTo.getId() : null;
+    }
+
 
     public LocalDateTime getTimestamp() {
         return createdAt;
