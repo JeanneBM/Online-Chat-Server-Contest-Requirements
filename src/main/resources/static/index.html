@@ -252,7 +252,7 @@
             return;
         }
 
-        const socket = new SockJS("/ws");
+        const socket = new SockJS("/ws-chat");
         stompClient = Stomp.over(socket);
 
         stompClient.connect(
