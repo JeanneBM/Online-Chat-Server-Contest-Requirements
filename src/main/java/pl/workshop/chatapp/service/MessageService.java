@@ -49,10 +49,8 @@ public class MessageService {
         message.setSender(sender);
         message.setContent(normalizeContent(chatMessage.getContent()));
         message.setAttachmentUrl(chatMessage.getAttachmentUrl());
-        message.setReplyToId(chatMessage.getReplyToId());
+        message.setReplyTo(validateRoomReply(parsedRoomId, chatMessage.getReplyToId()));
         message.setTimestamp(LocalDateTime.now());
-
-        validateRoomReply(parsedRoomId, chatMessage.getReplyToId());
 
         Message saved = messageRepository.save(message);
 
@@ -77,14 +75,14 @@ public class MessageService {
             throw new SecurityException("Nie można wysłać wiadomości do tego użytkownika");
         }
 
-        validatePrivateReply(sender, receiver, chatMessage.getReplyToId());
+        Message replyToMessage = validatePrivateReply(sender, receiver, chatMessage.getReplyToId());
 
         Message message = new Message();
         message.setSender(sender);
         message.setReceiver(receiver);
         message.setContent(normalizeContent(chatMessage.getContent()));
         message.setAttachmentUrl(chatMessage.getAttachmentUrl());
-        message.setReplyToId(chatMessage.getReplyToId());
+        message.setReplyTo(replyToMessage);
         message.setTimestamp(LocalDateTime.now());
 
         Message saved = messageRepository.save(message);
@@ -207,9 +205,9 @@ public class MessageService {
                 || userBanRepository.existsByBannerAndBanned(b, a);
     }
 
-    private void validateRoomReply(Long roomId, Long replyToId) {
+    private Message validateRoomReply(Long roomId, Long replyToId) {
         if (replyToId == null) {
-            return;
+            return null;
         }
 
         Message repliedMessage = messageRepository.findById(replyToId).orElseThrow();
@@ -217,11 +215,13 @@ public class MessageService {
         if (repliedMessage.getRoom() == null || !roomId.equals(repliedMessage.getRoom().getId())) {
             throw new IllegalArgumentException("Nieprawidłowa wiadomość do odpowiedzi");
         }
+
+        return repliedMessage;
     }
 
-    private void validatePrivateReply(User sender, User receiver, Long replyToId) {
+    private Message validatePrivateReply(User sender, User receiver, Long replyToId) {
         if (replyToId == null) {
-            return;
+            return null;
         }
 
         Message repliedMessage = messageRepository.findById(replyToId).orElseThrow();
@@ -233,6 +233,8 @@ public class MessageService {
         if (!belongsToConversation) {
             throw new IllegalArgumentException("Nieprawidłowa wiadomość do odpowiedzi");
         }
+
+        return repliedMessage;
     }
 
     private String normalizeContent(String content) {

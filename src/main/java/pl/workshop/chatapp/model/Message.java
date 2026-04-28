@@ -57,16 +57,6 @@ public class Message {
         return replyTo != null ? replyTo.getId() : null;
     }
 
-    public void setReplyToId(Long replyToId) {
-        if (replyToId == null) {
-            this.replyTo = null;
-            return;
-        }
-
-        Message parentMessage = new Message();
-        parentMessage.setId(replyToId);
-        this.replyTo = parentMessage;
-    }
 
     public LocalDateTime getTimestamp() {
         return createdAt;
