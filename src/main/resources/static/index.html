@@ -493,27 +493,13 @@
             setTimeout(() => loadPrivateMessages(privateUsername), 250);
         } else {
             await ensureRoomMembership(currentRoom, currentRoomId);
-            const response = await fetch(`/api/messages/room/${encodeURIComponent(roomKey)}`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    ...authHeaders()
-                },
-                body: JSON.stringify({
+            stompClient.send(
+                "/app/chat/send/" + roomKey,
+                {},
+                JSON.stringify({
                     content: content
                 })
-            });
-
-            if (!response.ok) {
-                alert(translateServerMessage(await response.text()));
-                return;
-            }
-
-            const savedMessage = await response.json();
-            if (savedMessage?.roomId) {
-                currentRoomId = savedMessage.roomId;
-            }
-            await refreshActiveRoomMessages();
+            );
         }
 
         input.value = "";
