@@ -94,8 +94,10 @@
     let username = localStorage.getItem("username");
     let stompClient = null;
     let roomSubscription = null;
+    let privateSubscription = null;
     let currentRoom = "public";
     let currentRoomId = null;
+    let currentPrivatePeer = null;
     let pendingRoomToJoin = null;
     let subscribedRoomId = null;
     let latestRooms = [];
@@ -208,9 +210,11 @@
             stompClient.disconnect();
         }
         roomSubscription = null;
+        privateSubscription = null;
         pendingRoomToJoin = null;
         currentRoom = "public";
         currentRoomId = null;
+        currentPrivatePeer = null;
         document.getElementById("active-room-label").textContent = "Active room: public";
 
         token = null;
@@ -286,6 +290,10 @@
         stompClient.connect(
             { Authorization: "Bearer " + token },
             function () {
+                if (privateSubscription) {
+                    privateSubscription.unsubscribe();
+                }
+                privateSubscription = stompClient.subscribe("/user/queue/private", onPrivateMessageReceived);
                 const roomToOpen = pendingRoomToJoin || currentRoom;
                 pendingRoomToJoin = null;
                 subscribeRoom(roomToOpen);
@@ -317,7 +325,12 @@
             return;
         }
 
-        await fetch(`/api/rooms/${roomId}/join`, {
+        const joinRoomId = room?.id ?? (Number.isFinite(Number(roomId)) ? Number(roomId) : null);
+        if (!joinRoomId) {
+            return;
+        }
+
+        await fetch(`/api/rooms/${joinRoomId}/join`, {
             method: "POST",
             headers: authHeaders()
         });
@@ -325,8 +338,11 @@
 
     function renderMessageEntry(msg) {
         const div = document.createElement("div");
+        const senderName = typeof msg.sender === "string"
+            ? msg.sender
+            : (msg.sender?.username || msg.sender?.email || "unknown");
         div.className = "message";
-        div.innerHTML = `<strong>${msg.sender || "unknown"}:</strong> ${msg.content || ""}`;
+        div.innerHTML = `<strong>${senderName}:</strong> ${msg.content || ""}`;
 
         if (msg.attachmentUrl) {
             div.innerHTML += `<br><a href="${msg.attachmentUrl}" target="_blank">📎 File</a>`;
@@ -360,6 +376,9 @@
 
     async function subscribeRoom(roomName, roomId = null) {
         currentRoom = roomName;
+        if (!roomName.startsWith("private-")) {
+            currentPrivatePeer = null;
+        }
         currentRoomId = roomId ?? resolveRoomId(roomName) ?? roomName;
         document.getElementById("active-room-label").textContent = `Active room: ${roomName}`;
         setInfo(MESSAGES.activeRoom(roomName));
@@ -398,6 +417,18 @@
         refreshUnreadCounts();
     }
 
+    function onPrivateMessageReceived(payload) {
+        const msg = JSON.parse(payload.body);
+
+        if (currentRoom.startsWith("private-")) {
+            renderMessageEntry(msg);
+            document.getElementById("messages").scrollTop = 999999;
+            markPrivateRead(currentPrivatePeer);
+        }
+
+        refreshUnreadCounts();
+    }
+
     function sendMessage() {
         const input = document.getElementById("message-input");
         const content = input.value.trim();
@@ -416,15 +447,41 @@
             return;
         }
 
-        stompClient.send(
-            "/app/chat/send/" + currentRoomId,
-            {},
-            JSON.stringify({
-                content: content
-            })
-        );
+        if (currentRoom.startsWith("private-")) {
+            const privateUsername = currentPrivatePeer || currentRoom.replace("private-", "");
+            stompClient.send(
+                "/app/chat.sendPrivateMessage/" + privateUsername,
+                {},
+                JSON.stringify({
+                    content: content
+                })
+            );
+            setTimeout(() => loadPrivateMessages(privateUsername), 250);
+        } else {
+            stompClient.send(
+                "/app/chat/send/" + currentRoomId,
+                {},
+                JSON.stringify({
+                    content: content
+                })
+            );
+            setTimeout(() => refreshActiveRoomMessages(), 250);
+        }
 
         input.value = "";
+    }
+
+    function refreshActiveRoomMessages() {
+        if (currentRoom.startsWith("private-")) {
+            return;
+        }
+
+        const resolvedRoomId = resolveRoomId(currentRoom) ?? currentRoomId;
+        if (!resolvedRoomId) {
+            return;
+        }
+
+        loadRoomMessages(resolvedRoomId);
     }
 
     function deleteMessage(messageId) {
@@ -614,9 +671,22 @@
             return;
         }
 
-        subscribeRoom("private-" + privateUsername);
+        currentPrivatePeer = privateUsername;
+        subscribeRoom("private-" + privateUsername, "private-" + privateUsername);
+        loadPrivateMessages(privateUsername);
         markPrivateRead(privateUsername);
         refreshUnreadCounts();
+    }
+
+    async function loadPrivateMessages(privateUsername) {
+        if (!token || !privateUsername) return;
+        const response = await fetch(`/api/messages/private/${privateUsername}`, { headers: authHeaders() });
+        if (!response.ok) return;
+        const messages = await response.json();
+        const box = document.getElementById("messages");
+        box.innerHTML = "";
+        messages.forEach(renderMessageEntry);
+        box.scrollTop = box.scrollHeight;
     }
 
     function goToPublicRoom() {
