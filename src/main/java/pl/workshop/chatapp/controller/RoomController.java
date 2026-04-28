@@ -2,6 +2,7 @@ package pl.workshop.chatapp.controller;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import pl.workshop.chatapp.controller.dto.RoomSummaryDto;
 import pl.workshop.chatapp.controller.dto.RoomUserDto;
 import pl.workshop.chatapp.model.Room;
 import pl.workshop.chatapp.model.RoomBan;
@@ -42,12 +43,15 @@ public class RoomController {
     }
 
     @GetMapping("/my")
-    public ResponseEntity<List<Room>> getMyRooms(Principal principal) {
-        return ResponseEntity.ok(roomService.getRoomsForUser(principal.getName()));
+    public ResponseEntity<List<RoomSummaryDto>> getMyRooms(Principal principal) {
+        List<RoomSummaryDto> rooms = roomService.getRoomsForUser(principal.getName()).stream()
+                .map(RoomSummaryDto::from)
+                .toList();
+        return ResponseEntity.ok(rooms);
     }
 
     @GetMapping("/public")
-    public ResponseEntity<List<Room>> getPublicRooms(@RequestParam(required = false) String search) {
+    public ResponseEntity<List<RoomSummaryDto>> getPublicRooms(@RequestParam(required = false) String search) {
         List<Room> rooms;
 
         if (search == null || search.isBlank()) {
@@ -56,7 +60,7 @@ public class RoomController {
             rooms = roomService.getPublicRooms(search);
         }
 
-        return ResponseEntity.ok(rooms);
+        return ResponseEntity.ok(rooms.stream().map(RoomSummaryDto::from).toList());
     }
 
     @PostMapping("/{roomId}/join")
