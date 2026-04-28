@@ -522,17 +522,6 @@
             return;
         }
 
-        if (!currentRoomId) {
-            await loadPublicRooms();
-            currentRoomId = resolveRoomId(currentRoom) ?? null;
-        }
-
-        const roomKey = currentRoomId ?? currentRoom;
-        if (!roomKey) {
-            alert("Room is not ready yet. Please refresh room list and try again.");
-            return;
-        }
-
         if (currentRoom.startsWith("private-")) {
             const privateUsername = currentPrivatePeer || currentRoom.replace("private-", "");
             stompClient.send(
@@ -545,9 +534,21 @@
             );
             setTimeout(() => loadPrivateMessages(privateUsername), 250);
         } else {
+            if (!currentRoomId) {
+                await loadPublicRooms();
+                currentRoomId = resolveRoomId(currentRoom) ?? null;
+            }
+            if (!currentRoomId) {
+                await subscribeRoom(currentRoom);
+            }
+            if (!currentRoomId) {
+                alert("Room is not ready yet. Please refresh room list and try again.");
+                return;
+            }
+
             await ensureRoomMembership(currentRoom, currentRoomId);
             stompClient.send(
-                "/app/chat/send/" + roomKey,
+                "/app/chat/send/" + currentRoomId,
                 {},
                 JSON.stringify({
                     content: content || null,
