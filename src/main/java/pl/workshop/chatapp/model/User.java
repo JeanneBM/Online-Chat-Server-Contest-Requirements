@@ -55,7 +55,16 @@ public class User implements UserDetails {
     private Set<UserSession> sessions = new HashSet<>();
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<ActiveSession> activeSessions = new HashSet<>();
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<PasswordResetToken> resetTokens = new HashSet<>();
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<RoomMembership> roomMemberships = new HashSet<>();
+
+    @OneToMany(mappedBy = "uploadedBy", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<Attachment> uploadedAttachments = new HashSet<>();
 
     // ==================== METODY POMOCNICZE ====================
     public boolean isFriend(User other) {
