@@ -35,6 +35,9 @@ public class WebSocketJwtInterceptor implements ChannelInterceptor {
                             && sessionId != null
                             && sessionService.isSessionActive(email, sessionId)) {
                         accessor.setUser(new UsernamePasswordAuthenticationToken(email, null));
+                        if (accessor.getSessionAttributes() != null) {
+                            accessor.getSessionAttributes().put("authSessionId", sessionId);
+                        }
                     }
                 } catch (Exception ignored) {
                 }

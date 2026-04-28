@@ -1,6 +1,7 @@
 package pl.workshop.chatapp.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +22,7 @@ public class SessionService {
 
     private final ActiveSessionRepository sessionRepo;
     private final UserRepository userRepo;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ActiveSession createLoginSession(String email, String ip, String userAgent) {
         User user = userRepo.findByEmail(email).orElseThrow();
@@ -36,8 +38,7 @@ public class SessionService {
         ActiveSession saved = sessionRepo.save(session);
 
         user.setLastActivity(LocalDateTime.now());
-        user.setPresenceStatus(PresenceStatus.ONLINE);
-        userRepo.save(user);
+        updatePresence(user, PresenceStatus.ONLINE);
 
         return saved;
     }
@@ -60,8 +61,24 @@ public class SessionService {
         sessionRepo.save(session);
 
         user.setLastActivity(LocalDateTime.now());
-        user.setPresenceStatus(PresenceStatus.ONLINE);
-        userRepo.save(user);
+        updatePresence(user, PresenceStatus.ONLINE);
+    }
+
+    public void updateWebSocketActivity(String email, String sessionId) {
+        if (email == null || email.isBlank() || sessionId == null || sessionId.isBlank()) {
+            return;
+        }
+
+        User user = userRepo.findByEmail(email.trim().toLowerCase()).orElseThrow();
+        ActiveSession session = sessionRepo.findBySessionIdAndUser(sessionId, user).orElseThrow();
+
+        LocalDateTime now = LocalDateTime.now();
+        session.setLastActivity(now);
+        session.setActive(true);
+        sessionRepo.save(session);
+
+        user.setLastActivity(now);
+        updatePresence(user, PresenceStatus.ONLINE);
     }
 
     public boolean isSessionActive(String email, String sessionId) {
@@ -94,22 +111,22 @@ public class SessionService {
         List<ActiveSession> activeSessions = sessionRepo.findByUserAndActiveTrue(user);
 
         if (activeSessions.isEmpty()) {
-            user.setPresenceStatus(PresenceStatus.OFFLINE);
-        } else {
-            LocalDateTime threshold = LocalDateTime.now().minusMinutes(1);
-
-            boolean anyRecentlyActive = activeSessions.stream()
-                    .anyMatch(s -> s.getLastActivity() != null && s.getLastActivity().isAfter(threshold));
-
-            user.setPresenceStatus(anyRecentlyActive ? PresenceStatus.ONLINE : PresenceStatus.AFK);
-            user.setLastActivity(activeSessions.stream()
-                    .map(ActiveSession::getLastActivity)
-                    .filter(t -> t != null)
-                    .max(LocalDateTime::compareTo)
-                    .orElse(LocalDateTime.now()));
+            updatePresence(user, PresenceStatus.OFFLINE);
+            return;
         }
 
-        userRepo.save(user);
+        LocalDateTime threshold = LocalDateTime.now().minusMinutes(1);
+
+        boolean anyRecentlyActive = activeSessions.stream()
+                .anyMatch(s -> s.getLastActivity() != null && s.getLastActivity().isAfter(threshold));
+
+        user.setLastActivity(activeSessions.stream()
+                .map(ActiveSession::getLastActivity)
+                .filter(t -> t != null)
+                .max(LocalDateTime::compareTo)
+                .orElse(LocalDateTime.now()));
+
+        updatePresence(user, anyRecentlyActive ? PresenceStatus.ONLINE : PresenceStatus.AFK);
     }
 
     @Scheduled(fixedRate = 1000)
@@ -121,14 +138,26 @@ public class SessionService {
             List<ActiveSession> activeSessions = sessionRepo.findByUserAndActiveTrue(user);
 
             if (activeSessions.isEmpty()) {
-                user.setPresenceStatus(PresenceStatus.OFFLINE);
-            } else {
-                boolean anyRecentlyActive = activeSessions.stream()
-                        .anyMatch(s -> s.getLastActivity() != null && s.getLastActivity().isAfter(threshold));
-                user.setPresenceStatus(anyRecentlyActive ? PresenceStatus.ONLINE : PresenceStatus.AFK);
+                updatePresence(user, PresenceStatus.OFFLINE);
+                continue;
             }
 
-            userRepo.save(user);
+            boolean anyRecentlyActive = activeSessions.stream()
+                    .anyMatch(s -> s.getLastActivity() != null && s.getLastActivity().isAfter(threshold));
+            updatePresence(user, anyRecentlyActive ? PresenceStatus.ONLINE : PresenceStatus.AFK);
+        }
+    }
+
+    private void updatePresence(User user, PresenceStatus newStatus) {
+        PresenceStatus oldStatus = user.getPresenceStatus() != null ? user.getPresenceStatus() : PresenceStatus.OFFLINE;
+        user.setPresenceStatus(newStatus);
+        userRepo.save(user);
+
+        if (oldStatus != newStatus) {
+            eventPublisher.publishEvent(new PresenceStatusChangedEvent(
+                    user.getUsername(),
+                    user.getPresenceStatus() != null ? user.getPresenceStatus() : PresenceStatus.OFFLINE
+            ));
         }
     }
 }
