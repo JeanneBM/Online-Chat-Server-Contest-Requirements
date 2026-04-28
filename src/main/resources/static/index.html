@@ -37,6 +37,7 @@
             <div id="room-list-empty">No rooms loaded yet. Click Refresh.</div>
             <div id="room-list"></div>
         </div>
+        <div id="active-room-label" style="margin-top:8px;font-size:0.9em;color:#007bff;">Active room: public</div>
 
         <hr>
         <input id="new-room-name" placeholder="Room name">
@@ -78,7 +79,9 @@
     let token = localStorage.getItem("token");
     let username = localStorage.getItem("username");
     let stompClient = null;
+    let roomSubscription = null;
     let currentRoom = "public";
+    let pendingRoomToJoin = null;
     let latestRooms = [];
     const MESSAGES = {
         authRequired: "Username and password are required.",
@@ -183,6 +186,10 @@
         if (stompClient && stompClient.connected) {
             stompClient.disconnect();
         }
+        roomSubscription = null;
+        pendingRoomToJoin = null;
+        currentRoom = "public";
+        document.getElementById("active-room-label").textContent = "Active room: public";
 
         token = null;
         username = null;
@@ -241,13 +248,19 @@
     }
 
     function connectWebSocket() {
+        if (stompClient && stompClient.connected) {
+            return;
+        }
+
         const socket = new SockJS("/ws");
         stompClient = Stomp.over(socket);
 
         stompClient.connect(
             { Authorization: "Bearer " + token },
             function () {
-                subscribeRoom(currentRoom);
+                const roomToOpen = pendingRoomToJoin || currentRoom;
+                pendingRoomToJoin = null;
+                subscribeRoom(roomToOpen);
             },
             function (error) {
                 console.error("WebSocket error:", error);
@@ -257,12 +270,20 @@
 
     function subscribeRoom(roomName) {
         currentRoom = roomName;
+        document.getElementById("active-room-label").textContent = `Active room: ${roomName}`;
+        setInfo(MESSAGES.activeRoom(roomName));
 
         if (!stompClient || !stompClient.connected) {
+            pendingRoomToJoin = roomName;
+            connectWebSocket();
             return;
         }
 
-        stompClient.subscribe("/topic/room/" + roomName, onMessageReceived);
+        if (roomSubscription) {
+            roomSubscription.unsubscribe();
+        }
+
+        roomSubscription = stompClient.subscribe("/topic/room/" + roomName, onMessageReceived);
         document.getElementById("messages").innerHTML = "";
         setInfo(MESSAGES.activeRoom(roomName));
     }
