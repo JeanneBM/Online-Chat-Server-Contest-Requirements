@@ -3,6 +3,7 @@ package pl.workshop.chatapp.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import pl.workshop.chatapp.controller.dto.SentFriendRequestDto;
 import pl.workshop.chatapp.model.FriendRequest;
 import pl.workshop.chatapp.model.User;
 import pl.workshop.chatapp.model.UserBan;
@@ -99,6 +100,18 @@ public class FriendService {
     public List<FriendRequest> getPendingRequests(Long userId) {
         User user = userRepo.findById(userId).orElseThrow();
         return friendRequestRepo.findByReceiverAndStatus(user, FriendRequest.FriendRequestStatus.PENDING);
+    }
+
+    @Transactional(readOnly = true)
+    public List<SentFriendRequestDto> getSentPendingRequests(Long userId) {
+        User user = userRepo.findById(userId).orElseThrow();
+        return friendRequestRepo.findBySenderAndStatusOrderByCreatedAtDesc(user, FriendRequest.FriendRequestStatus.PENDING)
+                .stream()
+                .map(request -> new SentFriendRequestDto(
+                        request.getId(),
+                        request.getReceiver() != null ? request.getReceiver().getUsername() : null
+                ))
+                .toList();
     }
 
     @Transactional(readOnly = true)
