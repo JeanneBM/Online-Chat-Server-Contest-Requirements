@@ -32,6 +32,7 @@ docker compose up --build
 ```
 
 3. Open your browser and go to the application URL defined in `docker-compose.yml`.
+<img width="1313" height="1006" alt="obraz" src="https://github.com/user-attachments/assets/76de8368-2991-4d8c-8862-eec6617cb995" />
 
 ## Repository structure
 
