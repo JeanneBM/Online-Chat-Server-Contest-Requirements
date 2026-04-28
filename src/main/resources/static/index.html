@@ -94,6 +94,7 @@
     let stompClient = null;
     let roomSubscription = null;
     let currentRoom = "public";
+    let currentRoomId = null;
     let pendingRoomToJoin = null;
     let latestRooms = [];
     let unreadPollInterval = null;
@@ -208,6 +209,7 @@
         roomSubscription = null;
         pendingRoomToJoin = null;
         currentRoom = "public";
+        currentRoomId = null;
         document.getElementById("active-room-label").textContent = "Active room: public";
 
         token = null;
@@ -299,8 +301,14 @@
         );
     }
 
-    function subscribeRoom(roomName) {
+    function resolveRoomId(roomName) {
+        const room = latestRooms.find(r => normalizeRoomName(r) === roomName);
+        return room?.id ?? null;
+    }
+
+    function subscribeRoom(roomName, roomId = null) {
         currentRoom = roomName;
+        currentRoomId = roomId ?? resolveRoomId(roomName) ?? roomName;
         document.getElementById("active-room-label").textContent = `Active room: ${roomName}`;
         setInfo(MESSAGES.activeRoom(roomName));
 
@@ -314,7 +322,7 @@
             roomSubscription.unsubscribe();
         }
 
-        roomSubscription = stompClient.subscribe("/topic/room/" + roomName, onMessageReceived);
+        roomSubscription = stompClient.subscribe("/topic/room/" + currentRoomId, onMessageReceived);
         document.getElementById("messages").innerHTML = "";
         setInfo(MESSAGES.activeRoom(roomName));
         if (currentRoom !== "public" && !currentRoom.startsWith("private-")) {
@@ -360,7 +368,7 @@
         }
 
         stompClient.send(
-            "/app/chat.sendMessage/" + currentRoom,
+            "/app/chat/send/" + currentRoomId,
             {},
             JSON.stringify({
                 content: content
@@ -371,12 +379,12 @@
     }
 
     function deleteMessage(messageId) {
-        if (!stompClient || !stompClient.connected) {
+        if (!stompClient || !stompClient.connected || !currentRoomId) {
             return;
         }
 
         stompClient.send(
-            "/app/chat.deleteMessage/" + currentRoom,
+            "/app/chat.deleteMessage/" + currentRoomId,
             {},
             JSON.stringify({
                 messageId: messageId
@@ -392,7 +400,7 @@
         return room?.name || room?.roomName || room?.id || null;
     }
 
-    function upsertRoomJoinButton(roomName, prepend = false) {
+    function upsertRoomJoinButton(roomName, roomId = null, prepend = false) {
         const list = document.getElementById("room-list");
         const existingButtons = Array.from(list.querySelectorAll("button"));
         const alreadyVisible = existingButtons.some(btn => btn.dataset.roomName === roomName);
@@ -403,8 +411,11 @@
 
         const btn = document.createElement("button");
         btn.dataset.roomName = roomName;
+        if (roomId) {
+            btn.dataset.roomId = String(roomId);
+        }
         btn.textContent = `Join ${roomName}`;
-        btn.onclick = () => subscribeRoom(roomName);
+        btn.onclick = () => subscribeRoom(roomName, roomId);
 
         if (prepend) {
             list.prepend(btn);
@@ -414,7 +425,8 @@
     }
 
     function renderFixedRoomButtons() {
-        upsertRoomJoinButton("public", true);
+        const publicRoom = latestRooms.find(room => normalizeRoomName(room) === "public");
+        upsertRoomJoinButton("public", publicRoom?.id ?? null, true);
     }
 
     async function loadPublicRooms(selectedRoomName = null) {
@@ -429,7 +441,8 @@
         if (!response.ok) {
             console.error(await response.text());
             if (selectedRoomName) {
-                upsertRoomJoinButton(selectedRoomName, true);
+                const selectedRoom = latestRooms.find(room => normalizeRoomName(room) === selectedRoomName);
+                upsertRoomJoinButton(selectedRoomName, selectedRoom?.id ?? null, true);
                 document.getElementById("room-list-empty").textContent = "";
                 setInfo(`Room "${selectedRoomName}" is available via Quick Join.`);
             }
@@ -438,7 +451,14 @@
 
         const rooms = await response.json();
         latestRooms = rooms;
+        const resolvedCurrentRoomId = resolveRoomId(currentRoom);
+        currentRoomId = resolvedCurrentRoomId ?? currentRoom;
         setInfo(MESSAGES.roomListLoaded(rooms.length));
+
+        if (stompClient && stompClient.connected && resolvedCurrentRoomId
+            && (!roomSubscription || String(resolvedCurrentRoomId) !== String(currentRoom))) {
+            subscribeRoom(currentRoom, resolvedCurrentRoomId);
+        }
 
         const list = document.getElementById("room-list");
         list.innerHTML = "";
@@ -452,7 +472,7 @@
             if (!roomName) {
                 return;
             }
-            upsertRoomJoinButton(roomName);
+            upsertRoomJoinButton(roomName, room.id);
         });
 
         if (selectedRoomName) {
@@ -461,7 +481,8 @@
                 setInfo(MESSAGES.createdRoomVisible(selectedRoomName));
                 subscribeRoom(selectedRoomName);
             } else {
-                upsertRoomJoinButton(selectedRoomName, true);
+                const selectedRoom = rooms.find(room => normalizeRoomName(room) === selectedRoomName);
+                upsertRoomJoinButton(selectedRoomName, selectedRoom?.id ?? null, true);
                 roomEmptyInfo.textContent = "";
 
                 setInfo(MESSAGES.createdRoomQuickJoin(selectedRoomName));
@@ -494,7 +515,8 @@
 
             if (translatedMessage === "A room with this name already exists.") {
                 await loadPublicRooms(name);
-                upsertRoomJoinButton(name, true);
+                const existingRoom = latestRooms.find(room => normalizeRoomName(room) === name);
+                upsertRoomJoinButton(name, existingRoom?.id ?? null, true);
                 document.getElementById("room-list-empty").textContent = "";
                 alert(MESSAGES.roomAlreadyExists(name));
                 return;
