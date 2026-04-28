@@ -413,6 +413,10 @@
         }
     }
 
+    function renderFixedRoomButtons() {
+        upsertRoomJoinButton("public", true);
+    }
+
     async function loadPublicRooms(selectedRoomName = null) {
         if (!token) {
             return;
@@ -441,6 +445,7 @@
         const roomEmptyInfo = document.getElementById("room-list-empty");
         document.getElementById("room-count").textContent = "Rooms visible: " + rooms.length;
         roomEmptyInfo.textContent = rooms.length ? "" : MESSAGES.noPublicRooms;
+        renderFixedRoomButtons();
 
         rooms.forEach(room => {
             const roomName = normalizeRoomName(room);
