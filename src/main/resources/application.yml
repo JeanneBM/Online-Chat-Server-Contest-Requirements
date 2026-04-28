@@ -1,16 +1,31 @@
 spring:
+  application:
+    name: chat-app
   datasource:
-    url: ${SPRING_DATASOURCE_URL}
-    username: ${SPRING_DATASOURCE_USERNAME}
-    password: ${SPRING_DATASOURCE_PASSWORD}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/chatdb}
+    username: ${SPRING_DATASOURCE_USERNAME:chatuser}
+    password: ${SPRING_DATASOURCE_PASSWORD:chatpass123}
+    driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
 
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
+
+app:
+  upload:
+    dir: /app/uploads
 
 jwt:
-  secret: ${JWT_SECRET}
-  expiration: 86400000   # 24h
+  secret: ${JWT_SECRET:super-secret-key-change-in-production-2026}
+  expiration: ${JWT_EXPIRATION:86400000}
