@@ -41,7 +41,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/reset-token", "/api/auth/reset-password").permitAll()
-                        .requestMatchers("/ws-chat/**", "/ws-chat", "/sockjs-node/**").permitAll()
+                        .requestMatchers("/ws-chat/**", "/ws-chat", "/ws/**", "/ws", "/sockjs-node/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/", "/index.html", "/**/*.js", "/**/*.css", "/**/*.png", "/**/*.jpg", "/**/*.jpeg").permitAll()
                         .anyRequest().authenticated()
                 )
