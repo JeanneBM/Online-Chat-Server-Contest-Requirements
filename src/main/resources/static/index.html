@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>Online Chat - FINAL</title>
@@ -17,6 +17,9 @@
         .message .delete-btn { position:absolute; right:8px; top:8px; color:red; cursor:pointer; display:none; }
         .message:hover .delete-btn { display:block; }
         .input-area { padding:12px; background:#f8f9fa; display:flex; gap:8px; align-items:center; }
+        .room-section { margin-top:10px; padding:8px; border:1px solid #ddd; background:#fff; border-radius:6px; }
+        #room-list button { width:100%; text-align:left; margin:4px 0; padding:6px; }
+        #room-list-empty { font-size:0.9em; color:#666; margin-top:6px; }
     </style>
 </head>
 <body>
@@ -25,34 +28,39 @@
 
 <div class="main">
     <div class="sidebar">
-        <h4>Publiczne pokoje</h4>
-        <button onclick="loadPublicRooms()">Odśwież</button>
-        <button onclick="logout()" style="margin-left:8px;background:#dc3545;color:white;">Wyloguj</button>
-        <div id="room-list"></div>
+        <h4>Public Rooms</h4>
+        <button onclick="loadPublicRooms()">Refresh</button>
+        <button onclick="logout()" style="margin-left:8px;background:#dc3545;color:white;">Logout</button>
+        <div class="room-section">
+            <strong>Available room list</strong>
+            <div id="room-count" style="margin-top:8px;font-size:0.9em;color:#666;"></div>
+            <div id="room-list-empty">No rooms loaded yet. Click Refresh.</div>
+            <div id="room-list"></div>
+        </div>
 
         <hr>
-        <input id="new-room-name" placeholder="Nazwa pokoju">
-        <button onclick="createRoom()">Utwórz</button>
+        <input id="new-room-name" placeholder="Room name">
+        <button onclick="createRoom()">Create</button>
 
         <hr>
-        <h4>Znajomi</h4>
+        <h4>Friends</h4>
         <input id="friend-username" placeholder="Username">
-        <button onclick="sendFriendRequest()">Zaproszenie</button>
+        <button onclick="sendFriendRequest()">Invite</button>
         <div id="friends-list"></div>
 
         <hr>
-        <h4>Czat 1:1</h4>
+        <h4>Direct Chat 1:1</h4>
         <input id="private-username" placeholder="Username">
-        <button onclick="startPrivateChat()">Rozpocznij</button>
+        <button onclick="startPrivateChat()">Start</button>
     </div>
 
     <div class="chat-area">
         <div class="messages" id="messages"></div>
         <div class="input-area">
-            <input id="message-input" placeholder="Napisz wiadomość..." style="flex:1">
+            <input id="message-input" placeholder="Type a message..." style="flex:1">
             <input type="file" id="file-input" style="display:none" onchange="uploadAndSend()">
             <button onclick="document.getElementById('file-input').click()">📎</button>
-            <button onclick="sendMessage()">Wyślij</button>
+            <button onclick="sendMessage()">Send</button>
         </div>
     </div>
 </div>
@@ -60,9 +68,10 @@
 <div id="auth-panel" style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);color:white;display:flex;align-items:center;justify-content:center;flex-direction:column;z-index:1000;">
     <h2>Online Chat</h2>
     <input id="username" placeholder="Username" value="testuser" style="margin:8px;padding:12px;width:300px;"><br>
-    <input id="password" type="password" placeholder="Hasło" value="test123" style="margin:8px;padding:12px;width:300px;"><br>
-    <button onclick="login()" style="margin:8px;padding:12px 30px;width:300px;">Zaloguj</button>
-    <button onclick="register()" style="margin:8px;padding:12px 30px;width:300px;background:#28a745;">Zarejestruj</button>
+    <input id="password" type="password" placeholder="Password" value="test123" style="margin:8px;padding:12px;width:300px;"><br>
+    <button onclick="login()" style="margin:8px;padding:12px 30px;width:300px;">Sign In</button>
+    <button onclick="register()" style="margin:8px;padding:12px 30px;width:300px;background:#28a745;">Register</button>
+    <div id="user-info" style="margin-top:12px;font-size:14px;opacity:0.9;"></div>
 </div>
 
 <script>
@@ -70,13 +79,57 @@
     let username = localStorage.getItem("username");
     let stompClient = null;
     let currentRoom = "public";
+    let latestRooms = [];
+    const MESSAGES = {
+        authRequired: "Username and password are required.",
+        signedInAs: (name) => `Signed in as: ${name}`,
+        logoutSuccess: "Logged out successfully.",
+        accountCreated: (name) => `Account created. Signed in as: ${name}`,
+        activeRoom: (roomName) => `Active room: ${roomName}`,
+        websocketMissing: "No WebSocket connection.",
+        noPublicRooms: "No public rooms available.",
+        createdRoomVisible: (roomName) => `Room \"${roomName}\" created and ready to join.`,
+        createdRoomQuickJoin: (roomName) => `Room \"${roomName}\" created. Quick Join button added.`,
+        roomNameRequired: "Enter a room name.",
+        friendUsernameRequired: "Enter your friend's username.",
+        invitationSent: "Invitation sent.",
+        usernameRequired: "Enter a username.",
+        uploadPending: "File upload requires backend endpoint alignment.",
+        roomAlreadyExists: (roomName) => `Room "${roomName}" already exists. You can join it from the room list.`,
+        roomListLoaded: (count) => `Loaded public rooms: ${count}`
+    };
+
+    function setInfo(message) {
+        document.getElementById("user-info").textContent = message || "";
+    }
+
+    function translateServerMessage(rawMessage) {
+        if (!rawMessage) {
+            return "Unexpected server error.";
+        }
+
+        const message = rawMessage.trim();
+        const lower = message.toLowerCase();
+
+        if (lower.includes("pokój o tej nazwie już istnieje") || lower.includes("pokoj o tej nazwie juz istnieje")) {
+            return "A room with this name already exists.";
+        }
+        if (lower.includes("użytkownik") || lower.includes("uzytkownik")) {
+            return "User-related request failed.";
+        }
+        if (lower.includes("nie znaleziono")) {
+            return "Requested resource was not found.";
+        }
+
+        return message;
+    }
 
     async function login() {
         const usernameValue = document.getElementById("username").value.trim();
         const password = document.getElementById("password").value;
 
         if (!usernameValue || !password) {
-            alert("Username i hasło są wymagane");
+            alert(MESSAGES.authRequired);
             return;
         }
 
@@ -93,7 +146,7 @@
         });
 
         if (!response.ok) {
-            alert(await response.text());
+            alert(translateServerMessage(await response.text()));
             return;
         }
 
@@ -106,6 +159,7 @@
         localStorage.setItem("username", username);
 
         document.getElementById("auth-panel").style.display = "none";
+        setInfo(MESSAGES.signedInAs(username));
 
         connectWebSocket();
         loadPublicRooms();
@@ -123,7 +177,7 @@
                 headers: authHeaders()
             });
         } catch (error) {
-            console.error("Błąd logout:", error);
+            console.error("Logout error:", error);
         }
 
         if (stompClient && stompClient.connected) {
@@ -136,6 +190,7 @@
         localStorage.removeItem("username");
         document.getElementById("messages").innerHTML = "";
         document.getElementById("auth-panel").style.display = "flex";
+        setInfo(MESSAGES.logoutSuccess);
     }
 
     async function register() {
@@ -143,7 +198,7 @@
         const password = document.getElementById("password").value;
 
         if (!usernameValue || !password) {
-            alert("Username i hasło są wymagane");
+            alert(MESSAGES.authRequired);
             return;
         }
 
@@ -160,7 +215,7 @@
         });
 
         if (!response.ok) {
-            alert(await response.text());
+            alert(translateServerMessage(await response.text()));
             return;
         }
 
@@ -173,6 +228,7 @@
         localStorage.setItem("username", username);
 
         document.getElementById("auth-panel").style.display = "none";
+        setInfo(MESSAGES.accountCreated(username));
 
         connectWebSocket();
         loadPublicRooms();
@@ -208,6 +264,7 @@
 
         stompClient.subscribe("/topic/room/" + roomName, onMessageReceived);
         document.getElementById("messages").innerHTML = "";
+        setInfo(MESSAGES.activeRoom(roomName));
     }
 
     function onMessageReceived(payload) {
@@ -218,7 +275,7 @@
         div.innerHTML = `<strong>${msg.sender}:</strong> ${msg.content || ""}`;
 
         if (msg.attachmentUrl) {
-            div.innerHTML += `<br><a href="${msg.attachmentUrl}" target="_blank">📎 Plik</a>`;
+            div.innerHTML += `<br><a href="${msg.attachmentUrl}" target="_blank">📎 File</a>`;
         }
 
         const delBtn = document.createElement("span");
@@ -241,7 +298,7 @@
         }
 
         if (!stompClient || !stompClient.connected) {
-            alert("Brak połączenia z WebSocket");
+            alert(MESSAGES.websocketMissing);
             return;
         }
 
@@ -270,7 +327,36 @@
         );
     }
 
-    async function loadPublicRooms() {
+    function normalizeRoomName(room) {
+        if (typeof room === "string") {
+            return room;
+        }
+
+        return room?.name || room?.roomName || room?.id || null;
+    }
+
+    function upsertRoomJoinButton(roomName, prepend = false) {
+        const list = document.getElementById("room-list");
+        const existingButtons = Array.from(list.querySelectorAll("button"));
+        const alreadyVisible = existingButtons.some(btn => btn.dataset.roomName === roomName);
+
+        if (alreadyVisible) {
+            return;
+        }
+
+        const btn = document.createElement("button");
+        btn.dataset.roomName = roomName;
+        btn.textContent = `Join ${roomName}`;
+        btn.onclick = () => subscribeRoom(roomName);
+
+        if (prepend) {
+            list.prepend(btn);
+        } else {
+            list.appendChild(btn);
+        }
+    }
+
+    async function loadPublicRooms(selectedRoomName = null) {
         if (!token) {
             return;
         }
@@ -281,28 +367,51 @@
 
         if (!response.ok) {
             console.error(await response.text());
+            if (selectedRoomName) {
+                upsertRoomJoinButton(selectedRoomName, true);
+                document.getElementById("room-list-empty").textContent = "";
+                setInfo(`Room "${selectedRoomName}" is available via Quick Join.`);
+            }
             return;
         }
 
         const rooms = await response.json();
+        latestRooms = rooms;
+        setInfo(MESSAGES.roomListLoaded(rooms.length));
+
         const list = document.getElementById("room-list");
         list.innerHTML = "";
+        const roomEmptyInfo = document.getElementById("room-list-empty");
+        document.getElementById("room-count").textContent = "Rooms visible: " + rooms.length;
+        roomEmptyInfo.textContent = rooms.length ? "" : MESSAGES.noPublicRooms;
 
         rooms.forEach(room => {
-            const btn = document.createElement("button");
-            btn.textContent = room.name || room.roomName || room;
-            btn.style.display = "block";
-            btn.style.margin = "5px 0";
-            btn.onclick = () => subscribeRoom(btn.textContent);
-            list.appendChild(btn);
+            const roomName = normalizeRoomName(room);
+            if (!roomName) {
+                return;
+            }
+            upsertRoomJoinButton(roomName);
         });
+
+        if (selectedRoomName) {
+            const exists = rooms.some(room => normalizeRoomName(room) === selectedRoomName);
+            if (exists) {
+                setInfo(MESSAGES.createdRoomVisible(selectedRoomName));
+                subscribeRoom(selectedRoomName);
+            } else {
+                upsertRoomJoinButton(selectedRoomName, true);
+                roomEmptyInfo.textContent = "";
+
+                setInfo(MESSAGES.createdRoomQuickJoin(selectedRoomName));
+            }
+        }
     }
 
     async function createRoom() {
         const name = document.getElementById("new-room-name").value.trim();
 
         if (!name) {
-            alert("Podaj nazwę pokoju");
+            alert(MESSAGES.roomNameRequired);
             return;
         }
 
@@ -318,19 +427,30 @@
         });
 
         if (!response.ok) {
-            alert(await response.text());
+            const serverMessage = await response.text();
+            const translatedMessage = translateServerMessage(serverMessage);
+
+            if (translatedMessage === "A room with this name already exists.") {
+                await loadPublicRooms(name);
+                upsertRoomJoinButton(name, true);
+                document.getElementById("room-list-empty").textContent = "";
+                alert(MESSAGES.roomAlreadyExists(name));
+                return;
+            }
+
+            alert(translatedMessage);
             return;
         }
 
         document.getElementById("new-room-name").value = "";
-        loadPublicRooms();
+        await loadPublicRooms(name);
     }
 
     async function sendFriendRequest() {
         const friendUsername = document.getElementById("friend-username").value.trim();
 
         if (!friendUsername) {
-            alert("Podaj username znajomego");
+            alert(MESSAGES.friendUsernameRequired);
             return;
         }
 
@@ -346,18 +466,18 @@
         });
 
         if (!response.ok) {
-            alert(await response.text());
+            alert(translateServerMessage(await response.text()));
             return;
         }
 
-        alert("Wysłano zaproszenie");
+        alert(MESSAGES.invitationSent);
     }
 
     function startPrivateChat() {
         const privateUsername = document.getElementById("private-username").value.trim();
 
         if (!privateUsername) {
-            alert("Podaj username");
+            alert(MESSAGES.usernameRequired);
             return;
         }
 
@@ -365,7 +485,7 @@
     }
 
     async function uploadAndSend() {
-        alert("Upload plików wymaga dopasowania endpointu backendu.");
+        alert(MESSAGES.uploadPending);
     }
 
     window.onload = function () {
