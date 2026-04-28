@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(
         name = "room_memberships",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"room_id", "user_id"})
+        uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "room_id"})
 )
 @Getter
 @Setter
@@ -20,8 +20,9 @@ import java.time.LocalDateTime;
 public class RoomMembership {
 
     public enum Role {
-        MEMBER,
-        ADMIN
+        OWNER,
+        ADMIN,
+        MEMBER
     }
 
     @Id
@@ -29,12 +30,12 @@ public class RoomMembership {
     private Long id;
 
     @ManyToOne(optional = false)
-    @JoinColumn(name = "room_id", nullable = false)
-    private Room room;
-
-    @ManyToOne(optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "room_id", nullable = false)
+    private Room room;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
