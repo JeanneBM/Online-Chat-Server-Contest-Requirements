@@ -57,6 +57,10 @@
         <h4>Friends</h4>
         <input id="friend-username" placeholder="Username">
         <button onclick="sendFriendRequest()">Invite</button>
+        <div class="room-section">
+            <strong>Invited friends</strong>
+            <div id="sent-friend-requests-list" style="margin-top:6px;font-size:0.9em;color:#444;">No sent invitations.</div>
+        </div>
         <div id="friends-list"></div>
 
         <hr>
@@ -215,6 +219,7 @@
         loadPublicRooms();
         refreshUnreadCounts();
         loadFriends();
+        loadSentFriendRequests();
         if (unreadPollInterval) clearInterval(unreadPollInterval);
         unreadPollInterval = setInterval(refreshUnreadCounts, 5000);
     }
@@ -326,6 +331,7 @@
         loadPublicRooms();
         refreshUnreadCounts();
         loadFriends();
+        loadSentFriendRequests();
         if (unreadPollInterval) clearInterval(unreadPollInterval);
         unreadPollInterval = setInterval(refreshUnreadCounts, 5000);
     }
@@ -742,6 +748,7 @@
 
         alert(MESSAGES.invitationSent);
         loadFriends();
+        loadSentFriendRequests();
     }
 
     function startPrivateChat() {
@@ -821,6 +828,7 @@
             connectWebSocket();
             loadPublicRooms();
             loadFriends();
+            loadSentFriendRequests();
             refreshUnreadCounts();
             if (unreadPollInterval) clearInterval(unreadPollInterval);
             unreadPollInterval = setInterval(refreshUnreadCounts, 5000);
@@ -847,6 +855,26 @@
             const div = document.createElement("div");
             div.textContent = `${friend.username} (${friend.presenceStatus})`;
             container.appendChild(div);
+        });
+    }
+
+    async function loadSentFriendRequests() {
+        if (!token) return;
+        const response = await fetch("/api/friends/requests/sent", { headers: authHeaders() });
+        if (!response.ok) return;
+        const invitations = await response.json();
+        const container = document.getElementById("sent-friend-requests-list");
+        container.innerHTML = "";
+
+        if (!Array.isArray(invitations) || invitations.length === 0) {
+            container.textContent = "No sent invitations.";
+            return;
+        }
+
+        invitations.forEach(invitation => {
+            const row = document.createElement("div");
+            row.textContent = `${invitation.username} (pending)`;
+            container.appendChild(row);
         });
     }
 
