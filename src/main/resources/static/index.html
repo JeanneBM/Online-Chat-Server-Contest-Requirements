@@ -285,6 +285,7 @@
 
         roomSubscription = stompClient.subscribe("/topic/room/" + roomName, onMessageReceived);
         document.getElementById("messages").innerHTML = "";
+        setInfo(MESSAGES.activeRoom(roomName));
     }
 
     function onMessageReceived(payload) {
