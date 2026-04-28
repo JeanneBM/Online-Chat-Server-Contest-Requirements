@@ -34,6 +34,7 @@
         <h4>Public Rooms</h4>
         <button onclick="loadPublicRooms()">Refresh</button>
         <button onclick="logout()" style="margin-left:8px;background:#dc3545;color:white;">Logout</button>
+        <button onclick="deleteOwnProfile()" style="margin-left:8px;background:#6c757d;color:white;">Delete profile</button>
         <div class="room-section">
             <strong>Available room list</strong>
             <div id="room-count" style="margin-top:8px;font-size:0.9em;color:#666;"></div>
@@ -108,6 +109,9 @@
         authRequired: "Username and password are required.",
         signedInAs: (name) => `Signed in as: ${name}`,
         logoutSuccess: "Logged out successfully.",
+        confirmDeleteProfile: "Are you sure you want to permanently delete your profile?",
+        deleteProfileFailed: "Failed to delete your profile.",
+        deleteProfileSuccess: "Your profile was deleted.",
         accountCreated: (name) => `Account created. Signed in as: ${name}`,
         activeRoom: (roomName) => `Active room: ${roomName}`,
         websocketMissing: "No WebSocket connection.",
@@ -250,6 +254,35 @@
         document.getElementById("messages").innerHTML = "";
         document.getElementById("auth-panel").style.display = "flex";
         setInfo(MESSAGES.logoutSuccess);
+    }
+
+    async function deleteOwnProfile() {
+        if (!token) {
+            document.getElementById("auth-panel").style.display = "flex";
+            return;
+        }
+
+        if (!confirm(MESSAGES.confirmDeleteProfile)) {
+            return;
+        }
+
+        try {
+            const response = await fetch("/api/user/delete-account", {
+                method: "DELETE",
+                headers: authHeaders()
+            });
+
+            if (!response.ok) {
+                alert(translateServerMessage(await response.text()) || MESSAGES.deleteProfileFailed);
+                return;
+            }
+
+            await logout();
+            alert(MESSAGES.deleteProfileSuccess);
+        } catch (error) {
+            console.error("Delete profile error:", error);
+            alert(MESSAGES.deleteProfileFailed);
+        }
     }
 
     async function register() {
