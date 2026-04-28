@@ -1,58 +1,58 @@
-# Online Chat Server – rozwiązanie konkursowe
+# Online Chat Server – contest solution
 
-To repozytorium zawiera implementację serwera czatu webowego przygotowaną na podstawie wymagań z warsztatu.
+This repository contains an implementation of a web chat server prepared based on workshop requirements.
 
-> Pełna, oryginalna treść zadania znajduje się w pliku `README.txt`.
+> The full, original task description is available in `README.txt`.
 
-## Zakres projektu
+## Project scope
 
-Aplikacja realizuje klasyczny scenariusz komunikatora internetowego, obejmujący m.in.:
+The application implements a classic internet messenger scenario, including:
 
-- rejestrację i logowanie użytkowników,
-- pokoje publiczne i prywatne,
-- wiadomości 1:1,
-- listę znajomych i zaproszenia,
-- obecność użytkowników (online/AFK/offline),
-- historię wiadomości,
-- udostępnianie plików,
-- podstawowe funkcje moderacyjne.
+- user registration and login,
+- public and private rooms,
+- 1:1 messages,
+- friends list and invitations,
+- user presence (online/AFK/offline),
+- message history,
+- file sharing,
+- basic moderation features.
 
-## Wymagania techniczne
+## Technical requirements
 
 - Docker + Docker Compose
 - Java 17+
 
-## Szybki start
+## Quick start
 
-1. Sklonuj repozytorium.
-2. Uruchom aplikację w katalogu głównym:
+1. Clone the repository.
+2. Run the application from the repository root:
 
 ```bash
 docker compose up --build
 ```
 
-3. Otwórz przeglądarkę i przejdź do adresu aplikacji zdefiniowanego w `docker-compose.yml`.
+3. Open your browser and go to the application URL defined in `docker-compose.yml`.
 
-## Struktura repozytorium
+## Repository structure
 
-- `src/main/java` – kod aplikacji (Spring Boot),
-- `src/main/resources` – konfiguracja i statyczny frontend,
-- `src/test/java` – testy,
-- `scripts/` – skrypty pomocnicze (np. smoke/perf),
-- `docs/` – dokumentacja uzupełniająca i analiza wymagań.
+- `src/main/java` – application code (Spring Boot),
+- `src/main/resources` – configuration and static frontend,
+- `src/test/java` – tests,
+- `scripts/` – helper scripts (e.g., smoke/perf),
+- `docs/` – supplementary documentation and requirements analysis.
 
-## Testy i walidacja
+## Tests and validation
 
-Przykładowe komendy lokalne:
+Example local commands:
 
 ```bash
 ./mvnw test
 ./mvnw verify
 ```
 
-## Dokumentacja wymagań
+## Requirements documentation
 
-- `README.txt` – pełna treść zadania konkursowego,
-- `docs/requirements-gap-analysis.md` – mapa pokrycia wymagań,
-- `docs/non-functional-evidence.md` – dowody spełnienia wymagań niefunkcjonalnych,
-- `docs/perf/README.md` – informacje o testach wydajnościowych.
+- `README.txt` – full contest task description,
+- `docs/requirements-gap-analysis.md` – requirements coverage map,
+- `docs/non-functional-evidence.md` – evidence of meeting non-functional requirements,
+- `docs/perf/README.md` – performance testing information.
