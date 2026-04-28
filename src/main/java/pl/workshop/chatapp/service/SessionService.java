@@ -12,9 +12,7 @@ import pl.workshop.chatapp.repository.ActiveSessionRepository;
 import pl.workshop.chatapp.repository.UserRepository;
 
 import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -163,13 +161,4 @@ public class SessionService {
         }
     }
 
-    private void broadcastPresence(User user) {
-        Map<String, String> payload = new HashMap<>();
-        payload.put("username", user.getUsername());
-        payload.put("status", user.getPresenceStatus() != null
-                ? user.getPresenceStatus().name()
-                : PresenceStatus.OFFLINE.name());
-
-        messagingTemplate.convertAndSend("/topic/presence", payload);
-    }
 }
