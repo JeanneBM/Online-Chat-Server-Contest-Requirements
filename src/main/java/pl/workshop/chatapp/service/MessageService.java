@@ -58,6 +58,7 @@ public class MessageService {
         Message saved = messageRepository.save(message);
 
         ChatMessage response = new ChatMessage();
+        response.setId(saved.getId());
         response.setType(MessageType.CHAT);
         response.setRoomId(String.valueOf(parsedRoomId));
         response.setSender(resolveBusinessUsername(sender));
@@ -91,6 +92,7 @@ public class MessageService {
         Message saved = messageRepository.save(message);
 
         ChatMessage response = new ChatMessage();
+        response.setId(saved.getId());
         response.setType(MessageType.CHAT);
         response.setSender(resolveBusinessUsername(sender));
         response.setContent(saved.getContent());
