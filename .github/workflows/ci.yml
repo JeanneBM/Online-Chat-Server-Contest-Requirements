@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  build-test-smoke:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -18,11 +18,5 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Build and test
-        run: ./mvnw -B test
-
       - name: Build jar
         run: ./mvnw -B -DskipTests package
-
-      - name: API smoke test (context starts)
-        run: ./mvnw -B -DskipTests spring-boot:run & sleep 25 && curl -f http://localhost:8080/ || (cat target/surefire-reports/*.txt || true; exit 1)

@@ -90,6 +90,12 @@ public class FriendService {
         banned.getFriends().remove(banner);
     }
 
+    public void unbanUser(Long bannerId, Long bannedId) {
+        User banner = userRepo.findById(bannerId).orElseThrow();
+        User banned = userRepo.findById(bannedId).orElseThrow();
+        userBanRepo.deleteByBannerAndBanned(banner, banned);
+    }
+
     public List<FriendRequest> getPendingRequests(Long userId) {
         User user = userRepo.findById(userId).orElseThrow();
         return friendRequestRepo.findByReceiverAndStatus(user, FriendRequest.FriendRequestStatus.PENDING);

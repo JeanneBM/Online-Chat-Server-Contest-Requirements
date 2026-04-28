@@ -94,4 +94,11 @@ public class FriendController {
         friendService.banUser(banner.getId(), userId);
         return ResponseEntity.ok("Użytkownik zbanowany");
     }
+
+    @DeleteMapping("/ban/{userId}")
+    public ResponseEntity<?> unbanUser(@PathVariable Long userId, Principal principal) {
+        User banner = userRepository.findByEmail(principal.getName()).orElseThrow();
+        friendService.unbanUser(banner.getId(), userId);
+        return ResponseEntity.ok("Użytkownik odbanowany");
+    }
 }
