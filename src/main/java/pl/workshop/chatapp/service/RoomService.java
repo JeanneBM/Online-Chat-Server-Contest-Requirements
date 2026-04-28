@@ -15,6 +15,7 @@ import pl.workshop.chatapp.repository.UserRepository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Set;
 
 @Service
@@ -214,6 +215,22 @@ public class RoomService {
         room.getBannedUsers().remove(targetUser);
         roomBanRepository.deleteByRoomAndBannedUser(room, targetUser);
         return roomRepository.save(room);
+    }
+
+    @Transactional(readOnly = true)
+    public Set<User> getRoomUsers(Long roomId, String actingEmail) {
+        Room room = roomRepository.findById(roomId).orElseThrow();
+        User actingUser = findUserByEmail(actingEmail);
+
+        if (!isMember(room, actingUser)) {
+            throw new SecurityException("Brak dostępu do listy użytkowników pokoju");
+        }
+
+        Set<User> users = new LinkedHashSet<>();
+        users.add(room.getOwner());
+        users.addAll(room.getAdmins());
+        users.addAll(room.getMembers());
+        return users;
     }
 
     public Room addAdmin(Long roomId, String targetUsername, String actingEmail) {

@@ -95,6 +95,14 @@ public class FriendService {
         return friendRequestRepo.findByReceiverAndStatus(user, FriendRequest.FriendRequestStatus.PENDING);
     }
 
+    @Transactional(readOnly = true)
+    public List<User> getFriends(Long userId) {
+        User user = userRepo.findById(userId).orElseThrow();
+        return user.getFriends().stream()
+                .sorted((a, b) -> a.getUsername().compareToIgnoreCase(b.getUsername()))
+                .toList();
+    }
+
     public boolean canSendPersonalMessage(User sender, User receiver) {
         return sender.isFriend(receiver)
                 && !sender.hasBanned(receiver)

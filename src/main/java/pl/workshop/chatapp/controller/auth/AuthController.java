@@ -179,4 +179,33 @@ public class AuthController {
         userService.deleteAccount(user.getId());
         return ResponseEntity.ok("Konto usunięte");
     }
+
+    @PostMapping("/password-reset/request")
+    public ResponseEntity<?> requestPasswordReset(@RequestBody Map<String, String> request) {
+        String email = request.get("email");
+        email = email != null ? email.trim().toLowerCase() : null;
+
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.badRequest().body("Email jest wymagany");
+        }
+
+        String token = passwordService.createResetToken(email);
+        return ResponseEntity.ok(Map.of(
+                "message", "Token resetu został wygenerowany",
+                "token", token
+        ));
+    }
+
+    @PostMapping("/password-reset/confirm")
+    public ResponseEntity<?> confirmPasswordReset(@RequestBody Map<String, String> request) {
+        String token = request.get("token");
+        String newPassword = request.get("newPassword");
+
+        if (token == null || token.isBlank() || newPassword == null || newPassword.isBlank()) {
+            return ResponseEntity.badRequest().body("token i newPassword są wymagane");
+        }
+
+        passwordService.resetPassword(token, newPassword);
+        return ResponseEntity.ok("Hasło zresetowane pomyślnie");
+    }
 }

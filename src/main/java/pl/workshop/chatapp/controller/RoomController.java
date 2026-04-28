@@ -2,6 +2,7 @@ package pl.workshop.chatapp.controller;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import pl.workshop.chatapp.controller.dto.RoomUserDto;
 import pl.workshop.chatapp.model.Room;
 import pl.workshop.chatapp.model.RoomBan;
 import pl.workshop.chatapp.model.RoomInvitation;
@@ -163,5 +164,19 @@ public class RoomController {
     public ResponseEntity<?> deleteRoom(@PathVariable Long roomId, Principal principal) {
         roomService.deleteRoom(roomId, principal.getName());
         return ResponseEntity.ok("Pokój i wszystkie pliki usunięte");
+    }
+
+    @GetMapping("/{roomId}/users")
+    public ResponseEntity<List<RoomUserDto>> getRoomUsers(@PathVariable Long roomId, Principal principal) {
+        Room room = roomRepository.findById(roomId).orElseThrow();
+        List<RoomUserDto> users = roomService.getRoomUsers(roomId, principal.getName()).stream()
+                .map(user -> RoomUserDto.from(
+                        user,
+                        user.equals(room.getOwner()),
+                        room.getAdmins().contains(user)
+                ))
+                .toList();
+
+        return ResponseEntity.ok(users);
     }
 }

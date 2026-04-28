@@ -112,7 +112,7 @@ public class SessionService {
         userRepo.save(user);
     }
 
-    @Scheduled(fixedRate = 30000)
+    @Scheduled(fixedRate = 1000)
     public void checkAFK() {
         LocalDateTime threshold = LocalDateTime.now().minusMinutes(1);
         List<User> users = userRepo.findAll();
