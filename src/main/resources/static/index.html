@@ -103,6 +103,7 @@
     let latestRooms = [];
     let unreadPollInterval = null;
     let presencePingInterval = null;
+    let lastUserInteractionAt = Date.now();
     const MESSAGES = {
         authRequired: "Username and password are required.",
         signedInAs: (name) => `Signed in as: ${name}`,
@@ -120,6 +121,28 @@
         uploadPending: "File upload requires backend endpoint alignment.",
         roomListLoaded: (count) => `Loaded public rooms: ${count}`
     };
+
+
+    function markUserInteraction() {
+        lastUserInteractionAt = Date.now();
+    }
+
+    function bindUserActivityTracking() {
+        const events = ["mousemove", "keydown", "click", "scroll", "touchstart"];
+        events.forEach(evt => window.addEventListener(evt, markUserInteraction, { passive: true }));
+        document.addEventListener("visibilitychange", () => {
+            if (!document.hidden) {
+                markUserInteraction();
+            }
+        });
+    }
+
+    function isUserActiveInCurrentTab() {
+        if (document.hidden) {
+            return false;
+        }
+        return Date.now() - lastUserInteractionAt <= 60_000;
+    }
 
     function setInfo(message) {
         document.getElementById("user-info").textContent = message || "";
@@ -299,7 +322,7 @@
                 subscribeRoom(roomToOpen);
                 if (presencePingInterval) clearInterval(presencePingInterval);
                 presencePingInterval = setInterval(() => {
-                    if (stompClient && stompClient.connected) {
+                    if (stompClient && stompClient.connected && isUserActiveInCurrentTab()) {
                         stompClient.send("/app/presence.ping", {}, "{}");
                     }
                 }, 1000);
@@ -733,6 +756,7 @@
     }
 
     window.onload = function () {
+        bindUserActivityTracking();
         if (token) {
             document.getElementById("auth-panel").style.display = "none";
             connectWebSocket();
