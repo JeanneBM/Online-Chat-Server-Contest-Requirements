@@ -89,27 +89,18 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> request, HttpServletRequest httpRequest) {
         String email = request.get("email");
-        String username = request.get("username");
         String password = request.get("password");
 
         email = email != null ? email.trim().toLowerCase() : null;
-        username = username != null ? username.trim() : null;
 
-        if ((email == null || email.isBlank()) && (username == null || username.isBlank())
-                || password == null || password.isBlank()) {
-            return ResponseEntity.badRequest().body("Email lub username oraz password są wymagane");
+        if (email == null || email.isBlank() || password == null || password.isBlank()) {
+            return ResponseEntity.badRequest().body("Email i password są wymagane");
         }
 
-        User user = null;
-        if (email != null && !email.isBlank()) {
-            user = userRepository.findByEmail(email).orElse(null);
-        }
-        if (user == null && username != null && !username.isBlank()) {
-            user = userRepository.findByUsername(username).orElse(null);
-        }
+        User user = userRepository.findByEmail(email).orElse(null);
 
         if (user == null || !passwordEncoder.matches(password, user.getPassword())) {
-            return ResponseEntity.badRequest().body("Nieprawidłowy email/username lub hasło");
+            return ResponseEntity.badRequest().body("Nieprawidłowy email lub hasło");
         }
 
         ActiveSession session = sessionService.createLoginSession(

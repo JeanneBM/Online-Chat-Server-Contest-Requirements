@@ -6,4 +6,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface UserBanRepository extends JpaRepository<UserBan, Long> {
     boolean existsByBannerAndBanned(User banner, User banned);
+    void deleteByBannerAndBanned(User banner, User banned);
 }
