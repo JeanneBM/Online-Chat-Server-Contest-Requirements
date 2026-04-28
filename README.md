@@ -1,4 +1,4 @@
-# Online Chat Server – contest solution
+# Online Chat Server
 
 This repository contains an implementation of a web chat server prepared based on workshop requirements.
 
