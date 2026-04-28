@@ -59,7 +59,7 @@ public class MessageService {
 
         ChatMessage response = new ChatMessage();
         response.setType(MessageType.CHAT);
-        response.setRoomId(roomId);
+        response.setRoomId(String.valueOf(parsedRoomId));
         response.setSender(resolveBusinessUsername(sender));
         response.setContent(saved.getContent());
         response.setAttachmentUrl(saved.getAttachmentUrl());

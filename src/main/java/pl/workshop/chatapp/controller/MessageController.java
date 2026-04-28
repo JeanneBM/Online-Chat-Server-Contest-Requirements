@@ -34,13 +34,13 @@ public class MessageController {
         return ResponseEntity.ok(messageService.getRoomMessages(roomId, email));
     }
 
-    @PostMapping("/room/{roomId}")
-    public ResponseEntity<ChatMessage> sendRoomMessage(@PathVariable Long roomId,
+    @PostMapping("/room/{roomKey}")
+    public ResponseEntity<ChatMessage> sendRoomMessage(@PathVariable String roomKey,
                                                        @RequestBody ChatMessage chatMessage,
                                                        Principal principal) {
         String email = extractAuthenticatedEmail(principal);
-        ChatMessage response = messageService.sendRoomMessage(String.valueOf(roomId), chatMessage, email);
-        messagingTemplate.convertAndSend("/topic/room/" + roomId, response);
+        ChatMessage response = messageService.sendRoomMessage(roomKey, chatMessage, email);
+        messagingTemplate.convertAndSend("/topic/room/" + response.getRoomId(), response);
         return ResponseEntity.ok(response);
     }
 
