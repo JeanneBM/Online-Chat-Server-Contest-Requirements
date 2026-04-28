@@ -17,6 +17,9 @@
         .message .delete-btn { position:absolute; right:8px; top:8px; color:red; cursor:pointer; display:none; }
         .message:hover .delete-btn { display:block; }
         .input-area { padding:12px; background:#f8f9fa; display:flex; gap:8px; align-items:center; }
+        .room-section { margin-top:10px; padding:8px; border:1px solid #ddd; background:#fff; border-radius:6px; }
+        #room-list button { width:100%; text-align:left; margin:4px 0; padding:6px; }
+        #room-list-empty { font-size:0.9em; color:#666; margin-top:6px; }
     </style>
 </head>
 <body>
@@ -28,9 +31,12 @@
         <h4>Public Rooms</h4>
         <button onclick="loadPublicRooms()">Refresh</button>
         <button onclick="logout()" style="margin-left:8px;background:#dc3545;color:white;">Logout</button>
-        <div id="room-count" style="margin-top:8px;font-size:0.9em;color:#666;"></div>
-        <div id="room-list"></div>
-        <ul id="room-names" style="padding-left:18px;margin-top:10px;"></ul>
+        <div class="room-section">
+            <strong>Available room list</strong>
+            <div id="room-count" style="margin-top:8px;font-size:0.9em;color:#666;"></div>
+            <div id="room-list-empty">No rooms loaded yet. Click Refresh.</div>
+            <div id="room-list"></div>
+        </div>
 
         <hr>
         <input id="new-room-name" placeholder="Room name">
@@ -329,32 +335,6 @@
         return room?.name || room?.roomName || room?.id || null;
     }
 
-    function renderRoomNames(rooms) {
-        const roomNames = document.getElementById("room-names");
-        roomNames.innerHTML = "";
-
-        if (!rooms.length) {
-            const li = document.createElement("li");
-            li.textContent = MESSAGES.noPublicRooms;
-            roomNames.appendChild(li);
-            return;
-        }
-
-        rooms.forEach(room => {
-            const name = normalizeRoomName(room);
-            if (!name) {
-                return;
-            }
-
-            const li = document.createElement("li");
-            const joinBtn = document.createElement("button");
-            joinBtn.textContent = `Join ${name}`;
-            joinBtn.onclick = () => subscribeRoom(name);
-            li.appendChild(joinBtn);
-            roomNames.appendChild(li);
-        });
-    }
-
     async function loadPublicRooms(selectedRoomName = null) {
         if (!token) {
             return;
@@ -375,8 +355,9 @@
 
         const list = document.getElementById("room-list");
         list.innerHTML = "";
+        const roomEmptyInfo = document.getElementById("room-list-empty");
         document.getElementById("room-count").textContent = "Rooms visible: " + rooms.length;
-        renderRoomNames(rooms);
+        roomEmptyInfo.textContent = rooms.length ? "" : MESSAGES.noPublicRooms;
 
         rooms.forEach(room => {
             const roomName = normalizeRoomName(room);
@@ -384,10 +365,8 @@
                 return;
             }
             const btn = document.createElement("button");
-            btn.textContent = roomName;
-            btn.style.display = "block";
-            btn.style.margin = "5px 0";
-            btn.onclick = () => subscribeRoom(btn.textContent);
+            btn.textContent = `Join ${roomName}`;
+            btn.onclick = () => subscribeRoom(roomName);
             list.appendChild(btn);
         });
 
@@ -398,18 +377,10 @@
                 subscribeRoom(selectedRoomName);
             } else {
                 const fallbackRoom = document.createElement("button");
-                fallbackRoom.textContent = selectedRoomName;
-                fallbackRoom.style.display = "block";
-                fallbackRoom.style.margin = "5px 0";
+                fallbackRoom.textContent = `Join ${selectedRoomName}`;
                 fallbackRoom.onclick = () => subscribeRoom(selectedRoomName);
                 list.prepend(fallbackRoom);
-
-                const fallbackLi = document.createElement("li");
-                const fallbackJoin = document.createElement("button");
-                fallbackJoin.textContent = `Join ${selectedRoomName}`;
-                fallbackJoin.onclick = () => subscribeRoom(selectedRoomName);
-                fallbackLi.appendChild(fallbackJoin);
-                document.getElementById("room-names").prepend(fallbackLi);
+                roomEmptyInfo.textContent = "";
 
                 setInfo(MESSAGES.createdRoomQuickJoin(selectedRoomName));
             }
