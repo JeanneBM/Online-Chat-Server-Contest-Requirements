@@ -758,8 +758,8 @@
         }
 
         alert(MESSAGES.invitationSent);
-        loadFriends();
-        loadSentFriendRequests();
+        await loadFriends();
+        await loadSentFriendRequests();
     }
 
     function startPrivateChat() {
@@ -883,6 +883,7 @@
         }
 
         invitations.forEach(invitation => {
+            if (!invitation?.username) return;
             const row = document.createElement("div");
             row.textContent = `${invitation.username} (pending)`;
             container.appendChild(row);

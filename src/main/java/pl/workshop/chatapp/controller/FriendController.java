@@ -4,6 +4,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 import pl.workshop.chatapp.controller.dto.FriendDto;
+import pl.workshop.chatapp.controller.dto.SentFriendRequestDto;
 import pl.workshop.chatapp.model.FriendRequest;
 import pl.workshop.chatapp.model.User;
 import pl.workshop.chatapp.repository.FriendRequestRepository;
@@ -82,15 +83,9 @@ public class FriendController {
     }
 
     @GetMapping("/requests/sent")
-    public List<Map<String, Object>> getSentPendingRequests(Principal principal) {
+    public List<SentFriendRequestDto> getSentPendingRequests(Principal principal) {
         User user = userRepository.findByEmail(principal.getName()).orElseThrow();
-        return friendService.getSentPendingRequests(user.getId())
-                .stream()
-                .map(request -> Map.<String, Object>of(
-                        "id", request.getId(),
-                        "username", request.getReceiver().getUsername()
-                ))
-                .toList();
+        return friendService.getSentPendingRequests(user.getId());
     }
 
     @DeleteMapping("/{friendId}")
