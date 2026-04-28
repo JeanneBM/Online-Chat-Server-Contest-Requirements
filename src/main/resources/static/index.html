@@ -209,6 +209,7 @@
         roomSubscription = null;
         pendingRoomToJoin = null;
         currentRoom = "public";
+        currentRoomId = null;
         document.getElementById("active-room-label").textContent = "Active room: public";
 
         token = null;
@@ -307,7 +308,7 @@
 
     function subscribeRoom(roomName, roomId = null) {
         currentRoom = roomName;
-        currentRoomId = roomId ?? resolveRoomId(roomName);
+        currentRoomId = roomId ?? resolveRoomId(roomName) ?? roomName;
         document.getElementById("active-room-label").textContent = `Active room: ${roomName}`;
         setInfo(MESSAGES.activeRoom(roomName));
 
@@ -460,11 +461,13 @@
 
         const rooms = await response.json();
         latestRooms = rooms;
-        currentRoomId = resolveRoomId(currentRoom);
+        const resolvedCurrentRoomId = resolveRoomId(currentRoom);
+        currentRoomId = resolvedCurrentRoomId ?? currentRoom;
         setInfo(MESSAGES.roomListLoaded(rooms.length));
 
-        if ((!roomSubscription || !roomSubscription.id) && stompClient && stompClient.connected && currentRoomId) {
-            subscribeRoom(currentRoom, currentRoomId);
+        if (stompClient && stompClient.connected && resolvedCurrentRoomId
+            && (!roomSubscription || String(resolvedCurrentRoomId) !== String(currentRoom))) {
+            subscribeRoom(currentRoom, resolvedCurrentRoomId);
         }
 
         const list = document.getElementById("room-list");

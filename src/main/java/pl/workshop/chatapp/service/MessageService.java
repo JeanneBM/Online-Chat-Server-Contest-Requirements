@@ -31,10 +31,9 @@ public class MessageService {
 
     public ChatMessage sendRoomMessage(String roomId, ChatMessage chatMessage, SimpMessageHeaderAccessor headerAccessor) {
         String senderEmail = extractAuthenticatedEmail(headerAccessor);
-        Long parsedRoomId = parseRoomId(roomId);
-
         User sender = findUserByEmail(senderEmail);
-        Room room = roomRepository.findById(parsedRoomId).orElseThrow();
+        Room room = findRoomByKey(roomId);
+        Long parsedRoomId = room.getId();
 
         if (!isRoomMember(room, sender)) {
             throw new SecurityException("Nie należysz do tego pokoju");
@@ -255,11 +254,17 @@ public class MessageService {
         return normalized;
     }
 
-    private Long parseRoomId(String roomId) {
-        try {
-            return Long.parseLong(roomId);
-        } catch (NumberFormatException e) {
+    private Room findRoomByKey(String roomId) {
+        if (roomId == null || roomId.isBlank()) {
             throw new IllegalArgumentException("Nieprawidłowe roomId: " + roomId);
+        }
+
+        try {
+            Long numericId = Long.parseLong(roomId);
+            return roomRepository.findById(numericId).orElseThrow();
+        } catch (NumberFormatException e) {
+            return roomRepository.findByName(roomId).orElseThrow(() ->
+                    new IllegalArgumentException("Nie znaleziono pokoju: " + roomId));
         }
     }
 
