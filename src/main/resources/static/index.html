@@ -318,6 +318,11 @@
             return;
         }
 
+        if (!currentRoomId) {
+            setInfo(`Unable to open room "${roomName}" (missing room id).`);
+            return;
+        }
+
         if (roomSubscription) {
             roomSubscription.unsubscribe();
         }
@@ -364,6 +369,11 @@
 
         if (!stompClient || !stompClient.connected) {
             alert(MESSAGES.websocketMissing);
+            return;
+        }
+
+        if (!currentRoomId) {
+            alert("Room is not ready yet. Please refresh room list and try again.");
             return;
         }
 
