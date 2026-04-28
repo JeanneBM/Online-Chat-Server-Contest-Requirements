@@ -34,8 +34,8 @@ public class ChatController {
         this.messagingTemplate = messagingTemplate;
     }
 
-    @MessageMapping("/chat.sendMessage/{roomId}")
-    @SendTo("/topic/{roomId}")
+    @MessageMapping("/chat/send/{roomId}")
+    @SendTo("/topic/room/{roomId}")
     public ChatMessage sendMessage(@DestinationVariable String roomId,
                                    @Payload ChatMessage chatMessage,
                                    SimpMessageHeaderAccessor headerAccessor) {

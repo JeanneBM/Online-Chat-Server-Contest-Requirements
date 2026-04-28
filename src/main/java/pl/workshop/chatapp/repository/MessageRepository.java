@@ -11,10 +11,22 @@ import java.util.List;
 import java.util.Optional;
 
 public interface MessageRepository extends JpaRepository<Message, Long> {
-    List<Message> findByRoomOrderByTimestampAsc(Room room);
-    List<Message> findBySenderAndReceiverOrderByTimestampAsc(User sender, User receiver);
-    List<Message> findByReceiverAndSenderOrderByTimestampAsc(User receiver, User sender);
+    List<Message> findByRoomOrderByCreatedAtAsc(Room room);
+    List<Message> findBySenderAndReceiverOrderByCreatedAtAsc(User sender, User receiver);
+    List<Message> findByReceiverAndSenderOrderByCreatedAtAsc(User receiver, User sender);
     Optional<Message> findByIdAndRoom(Long id, Room room);
+
+    default List<Message> findByRoomOrderByTimestampAsc(Room room) {
+        return findByRoomOrderByCreatedAtAsc(room);
+    }
+
+    default List<Message> findBySenderAndReceiverOrderByTimestampAsc(User sender, User receiver) {
+        return findBySenderAndReceiverOrderByCreatedAtAsc(sender, receiver);
+    }
+
+    default List<Message> findByReceiverAndSenderOrderByTimestampAsc(User receiver, User sender) {
+        return findByReceiverAndSenderOrderByCreatedAtAsc(receiver, sender);
+    }
 
     @Query("""
             select count(m) from Message m

@@ -23,14 +23,17 @@ public class User implements UserDetails {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(unique = true, nullable = false, length = 50, updatable = false)
+    private String username;
+
     @Column(unique = true, nullable = false)
     private String email;
 
-    @Column(unique = true, nullable = false, updatable = false)
-    private String username;
-
     @Column(nullable = false)
     private String password;
+
+    private LocalDateTime createdAt = LocalDateTime.now();
+    private LocalDateTime lastActiveAt = LocalDateTime.now();
 
     private boolean enabled = true;
 
@@ -39,7 +42,6 @@ public class User implements UserDetails {
 
     private LocalDateTime lastActivity = LocalDateTime.now();
 
-    // ==================== RELACJE FRIENDS + BANS + SESSIONS ====================
     @ManyToMany
     @JoinTable(
             name = "user_friends",
@@ -66,7 +68,6 @@ public class User implements UserDetails {
     @OneToMany(mappedBy = "uploadedBy", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<Attachment> uploadedAttachments = new HashSet<>();
 
-    // ==================== METODY POMOCNICZE ====================
     public boolean isFriend(User other) {
         return friends.contains(other);
     }
@@ -75,7 +76,6 @@ public class User implements UserDetails {
         return bans.stream().anyMatch(b -> b.getBanned().equals(other));
     }
 
-    // ==================== UserDetails ====================
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of();

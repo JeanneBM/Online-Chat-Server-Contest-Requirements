@@ -1,4 +1,4 @@
-package pl.workshop.chatapp.controller;
+package pl.workshop.chatapp.controller.auth;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
@@ -16,7 +16,7 @@ import java.security.Principal;
 import java.util.Map;
 
 @RestController
-@RequestMapping({"/api/auth", "/auth"})
+@RequestMapping("/api/auth")
 public class AuthController {
 
     private final UserRepository userRepository;
@@ -169,32 +169,7 @@ public class AuthController {
         return ResponseEntity.ok("Hasło zmienione pomyślnie");
     }
 
-    @PostMapping("/reset-token")
-    public ResponseEntity<?> createResetToken(@RequestParam String email) {
-        email = email != null ? email.trim().toLowerCase() : null;
-
-        if (email == null || email.isBlank()) {
-            return ResponseEntity.badRequest().body("Email jest wymagany");
-        }
-
-        String token = passwordService.createResetToken(email);
-        return ResponseEntity.ok(Map.of("token", token));
-    }
-
-    @PostMapping("/reset-password")
-    public ResponseEntity<?> resetPassword(@RequestBody Map<String, String> request) {
-        String token = request.get("token");
-        String newPassword = request.get("newPassword");
-
-        if (token == null || token.isBlank() || newPassword == null || newPassword.isBlank()) {
-            return ResponseEntity.badRequest().body("Token i newPassword są wymagane");
-        }
-
-        passwordService.resetPassword(token, newPassword);
-        return ResponseEntity.ok("Hasło zresetowane pomyślnie");
-    }
-
-    @DeleteMapping("/account")
+    @DeleteMapping("/delete-account")
     public ResponseEntity<?> deleteAccount(Principal principal) {
         if (principal == null || principal.getName() == null || principal.getName().isBlank()) {
             return ResponseEntity.badRequest().body("Brak zalogowanego użytkownika");

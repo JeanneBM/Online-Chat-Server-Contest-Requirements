@@ -9,7 +9,10 @@ import java.util.Set;
 
 @Entity
 @Table(name = "messages")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 public class Message {
 
     @Id
@@ -28,12 +31,21 @@ public class Message {
     @JoinColumn(name = "receiver_id")
     private User receiver;
 
-    @Column(length = 3072)
+    @Column(columnDefinition = "TEXT")
     private String content;
 
-    private String attachmentUrl;
+    @ManyToOne
+    @JoinColumn(name = "reply_to_id")
+    private Message replyTo;
 
-    private LocalDateTime timestamp = LocalDateTime.now();
+    private LocalDateTime createdAt = LocalDateTime.now();
+
+    private LocalDateTime editedAt;
+
+    @Column(name = "is_deleted")
+    private boolean isDeleted = false;
+
+    private String attachmentUrl;
 
     private Long replyToId;
 
@@ -41,4 +53,12 @@ public class Message {
 
     @OneToMany(mappedBy = "message", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<Attachment> attachments = new HashSet<>();
+
+    public LocalDateTime getTimestamp() {
+        return createdAt;
+    }
+
+    public void setTimestamp(LocalDateTime timestamp) {
+        this.createdAt = timestamp;
+    }
 }

@@ -6,11 +6,10 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-import pl.workshop.chatapp.model.User;
-import pl.workshop.chatapp.repository.UserRepository;
 import pl.workshop.chatapp.service.SessionService;
 
 import java.io.IOException;
@@ -19,16 +18,16 @@ import java.io.IOException;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
-    private final UserRepository userRepository;
+    private final UserDetailsServiceImpl userDetailsService;
     private final SessionService sessionService;
 
     public JwtAuthenticationFilter(
             JwtService jwtService,
-            UserRepository userRepository,
+            UserDetailsServiceImpl userDetailsService,
             SessionService sessionService
     ) {
         this.jwtService = jwtService;
-        this.userRepository = userRepository;
+        this.userDetailsService = userDetailsService;
         this.sessionService = sessionService;
     }
 
@@ -52,10 +51,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String sessionId = jwtService.extractSessionId(token);
 
             if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                User user = userRepository.findByEmail(email).orElse(null);
+                UserDetails userDetails = userDetailsService.loadUserByUsername(email);
 
-                boolean valid = user != null
-                        && jwtService.isTokenValid(token, email)
+                boolean valid = jwtService.isTokenValid(token, email)
                         && sessionId != null
                         && sessionService.isSessionActive(email, sessionId);
 
@@ -68,7 +66,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     );
 
                     UsernamePasswordAuthenticationToken authToken =
-                            new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
+                            new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
 
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authToken);
