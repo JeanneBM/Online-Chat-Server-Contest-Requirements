@@ -25,7 +25,7 @@
 
 <div class="main">
     <div class="sidebar">
-        <h4>Public Rooms</h4>
+        <h4>Public Rooms (Pokoje publiczne)</h4>
         <button onclick="loadPublicRooms()">Refresh</button>
         <button onclick="logout()" style="margin-left:8px;background:#dc3545;color:white;">Logout</button>
         <div id="room-count" style="margin-top:8px;font-size:0.9em;color:#666;"></div>
@@ -37,13 +37,13 @@
         <button onclick="createRoom()">Create</button>
 
         <hr>
-        <h4>Friends</h4>
+        <h4>Friends (Znajomi)</h4>
         <input id="friend-username" placeholder="Username">
         <button onclick="sendFriendRequest()">Invite</button>
         <div id="friends-list"></div>
 
         <hr>
-        <h4>Direct Chat 1:1</h4>
+        <h4>Direct Chat (Czat 1:1)</h4>
         <input id="private-username" placeholder="Username">
         <button onclick="startPrivateChat()">Start</button>
     </div>
@@ -282,36 +282,14 @@
         );
     }
 
-    function normalizeRoomName(room) {
-        if (typeof room === "string") {
-            return room;
-        }
-
-        return room?.name || room?.roomName || room?.id || null;
-    }
-
     function renderRoomNames(rooms) {
         const roomNames = document.getElementById("room-names");
         roomNames.innerHTML = "";
 
-        if (!rooms.length) {
-            const li = document.createElement("li");
-            li.textContent = "No public rooms available";
-            roomNames.appendChild(li);
-            return;
-        }
-
         rooms.forEach(room => {
-            const name = normalizeRoomName(room);
-            if (!name) {
-                return;
-            }
-
+            const name = room.name || room.roomName || room;
             const li = document.createElement("li");
-            const joinBtn = document.createElement("button");
-            joinBtn.textContent = `Join ${name}`;
-            joinBtn.onclick = () => subscribeRoom(name);
-            li.appendChild(joinBtn);
+            li.textContent = name;
             roomNames.appendChild(li);
         });
     }
@@ -339,10 +317,7 @@
         renderRoomNames(rooms);
 
         rooms.forEach(room => {
-            const roomName = normalizeRoomName(room);
-            if (!roomName) {
-                return;
-            }
+            const roomName = room.name || room.roomName || room;
             const btn = document.createElement("button");
             btn.textContent = roomName;
             btn.style.display = "block";
@@ -352,27 +327,12 @@
         });
 
         if (selectedRoomName) {
-            const exists = rooms.some(room => normalizeRoomName(room) === selectedRoomName);
-            if (exists) {
-                setInfo(`Dodano pokój "${selectedRoomName}". Możesz go od razu wybrać z listy.`);
-                subscribeRoom(selectedRoomName);
-            } else {
-                const fallbackRoom = document.createElement("button");
-                fallbackRoom.textContent = selectedRoomName;
-                fallbackRoom.style.display = "block";
-                fallbackRoom.style.margin = "5px 0";
-                fallbackRoom.onclick = () => subscribeRoom(selectedRoomName);
-                list.prepend(fallbackRoom);
-
-                const fallbackLi = document.createElement("li");
-                const fallbackJoin = document.createElement("button");
-                fallbackJoin.textContent = `Join ${selectedRoomName}`;
-                fallbackJoin.onclick = () => subscribeRoom(selectedRoomName);
-                fallbackLi.appendChild(fallbackJoin);
-                document.getElementById("room-names").prepend(fallbackLi);
-
-                setInfo(`Pokój "${selectedRoomName}" utworzony. Dodałem szybki przycisk do wejścia.`);
-            }
+            const exists = rooms.some(room => (room.name || room.roomName || room) === selectedRoomName);
+            setInfo(
+                exists
+                    ? `Dodano pokój "${selectedRoomName}". Lista pokoi została odświeżona (${rooms.length}).`
+                    : "Pokój został dodany, ale nie jest widoczny na publicznej liście."
+            );
         }
     }
 
