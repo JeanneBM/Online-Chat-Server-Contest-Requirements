@@ -3,6 +3,7 @@ package pl.workshop.chatapp.controller;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
+import pl.workshop.chatapp.controller.dto.FriendDto;
 import pl.workshop.chatapp.model.FriendRequest;
 import pl.workshop.chatapp.model.User;
 import pl.workshop.chatapp.repository.FriendRequestRepository;
@@ -11,6 +12,7 @@ import pl.workshop.chatapp.service.FriendService;
 
 import java.security.Principal;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/friends")
@@ -32,12 +34,31 @@ public class FriendController {
     }
 
     @PostMapping("/request")
-    public ResponseEntity<?> sendRequest(@RequestParam String username,
+    public ResponseEntity<?> sendRequest(@RequestParam(required = false) String username,
                                          @RequestParam(required = false) String message,
+                                         @RequestBody(required = false) Map<String, String> body,
                                          Principal principal) {
         User user = userRepository.findByEmail(principal.getName()).orElseThrow();
-        friendService.sendFriendRequest(user.getId(), username, message);
+        String resolvedUsername = username;
+        String resolvedMessage = message;
+        if ((resolvedUsername == null || resolvedUsername.isBlank()) && body != null) {
+            resolvedUsername = body.get("username");
+        }
+        if ((resolvedMessage == null || resolvedMessage.isBlank()) && body != null) {
+            resolvedMessage = body.get("message");
+        }
+        friendService.sendFriendRequest(user.getId(), resolvedUsername, resolvedMessage);
         return ResponseEntity.ok("Zaproszenie wysłane");
+    }
+
+    @GetMapping
+    public ResponseEntity<List<FriendDto>> getFriends(Principal principal) {
+        User user = userRepository.findByEmail(principal.getName()).orElseThrow();
+        List<FriendDto> friends = friendService.getFriends(user.getId())
+                .stream()
+                .map(FriendDto::from)
+                .toList();
+        return ResponseEntity.ok(friends);
     }
 
     @PostMapping("/request/{requestId}/accept")

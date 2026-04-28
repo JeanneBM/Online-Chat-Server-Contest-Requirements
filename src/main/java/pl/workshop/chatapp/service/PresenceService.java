@@ -73,7 +73,7 @@ public class PresenceService {
         });
     }
 
-    @Scheduled(fixedRate = 30000)
+    @Scheduled(fixedRate = 1000)
     public void checkAfkStatus() {
         LocalDateTime oneMinuteAgo = LocalDateTime.now().minusMinutes(1);
 

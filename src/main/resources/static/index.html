@@ -18,6 +18,9 @@
         .message:hover .delete-btn { display:block; }
         .input-area { padding:12px; background:#f8f9fa; display:flex; gap:8px; align-items:center; }
         .room-section { margin-top:10px; padding:8px; border:1px solid #ddd; background:#fff; border-radius:6px; }
+        .notification-box { margin-top:10px; padding:8px; border:1px solid #ffc107; background:#fff3cd; border-radius:6px; font-size:0.9em; }
+        .badge { display:inline-block; min-width:24px; padding:2px 6px; border-radius:999px; background:#dc3545; color:#fff; text-align:center; font-weight:bold; margin-left:6px; }
+        .room-user { display:flex; justify-content:space-between; align-items:center; gap:8px; margin:4px 0; }
         #room-list button { width:100%; text-align:left; margin:4px 0; padding:6px; }
         #room-list-empty { font-size:0.9em; color:#666; margin-top:6px; }
     </style>
@@ -38,6 +41,11 @@
             <div id="room-list"></div>
         </div>
         <div id="active-room-label" style="margin-top:8px;font-size:0.9em;color:#007bff;">Active room: public</div>
+        <div class="notification-box">
+            <strong>Unread</strong><br>
+            Private <span id="unread-private" class="badge">0</span><br>
+            Rooms <span id="unread-room" class="badge">0</span>
+        </div>
 
         <hr>
         <input id="new-room-name" placeholder="Room name">
@@ -53,6 +61,11 @@
         <h4>Direct Chat 1:1</h4>
         <input id="private-username" placeholder="Username">
         <button onclick="startPrivateChat()">Start</button>
+
+        <hr>
+        <h4>Users in room</h4>
+        <button onclick="loadRoomUsers()">Refresh users</button>
+        <div id="room-users-list"></div>
     </div>
 
     <div class="chat-area">
@@ -83,6 +96,8 @@
     let currentRoom = "public";
     let pendingRoomToJoin = null;
     let latestRooms = [];
+    let unreadPollInterval = null;
+    let presencePingInterval = null;
     const MESSAGES = {
         authRequired: "Username and password are required.",
         signedInAs: (name) => `Signed in as: ${name}`,
@@ -166,6 +181,10 @@
 
         connectWebSocket();
         loadPublicRooms();
+        refreshUnreadCounts();
+        loadFriends();
+        if (unreadPollInterval) clearInterval(unreadPollInterval);
+        unreadPollInterval = setInterval(refreshUnreadCounts, 5000);
     }
 
     async function logout() {
@@ -195,6 +214,8 @@
         username = null;
         localStorage.removeItem("token");
         localStorage.removeItem("username");
+        if (unreadPollInterval) clearInterval(unreadPollInterval);
+        if (presencePingInterval) clearInterval(presencePingInterval);
         document.getElementById("messages").innerHTML = "";
         document.getElementById("auth-panel").style.display = "flex";
         setInfo(MESSAGES.logoutSuccess);
@@ -239,6 +260,10 @@
 
         connectWebSocket();
         loadPublicRooms();
+        refreshUnreadCounts();
+        loadFriends();
+        if (unreadPollInterval) clearInterval(unreadPollInterval);
+        unreadPollInterval = setInterval(refreshUnreadCounts, 5000);
     }
 
     function authHeaders() {
@@ -261,6 +286,12 @@
                 const roomToOpen = pendingRoomToJoin || currentRoom;
                 pendingRoomToJoin = null;
                 subscribeRoom(roomToOpen);
+                if (presencePingInterval) clearInterval(presencePingInterval);
+                presencePingInterval = setInterval(() => {
+                    if (stompClient && stompClient.connected) {
+                        stompClient.send("/app/presence.ping", {}, "{}");
+                    }
+                }, 1000);
             },
             function (error) {
                 console.error("WebSocket error:", error);
@@ -286,6 +317,10 @@
         roomSubscription = stompClient.subscribe("/topic/room/" + roomName, onMessageReceived);
         document.getElementById("messages").innerHTML = "";
         setInfo(MESSAGES.activeRoom(roomName));
+        if (currentRoom !== "public" && !currentRoom.startsWith("private-")) {
+            markRoomRead(currentRoom);
+        }
+        loadRoomUsers();
     }
 
     function onMessageReceived(payload) {
@@ -308,6 +343,7 @@
 
         document.getElementById("messages").appendChild(div);
         document.getElementById("messages").scrollTop = 999999;
+        refreshUnreadCounts();
     }
 
     function sendMessage() {
@@ -492,6 +528,7 @@
         }
 
         alert(MESSAGES.invitationSent);
+        loadFriends();
     }
 
     function startPrivateChat() {
@@ -503,6 +540,8 @@
         }
 
         subscribeRoom("private-" + privateUsername);
+        markPrivateRead(privateUsername);
+        refreshUnreadCounts();
     }
 
     async function uploadAndSend() {
@@ -514,8 +553,81 @@
             document.getElementById("auth-panel").style.display = "none";
             connectWebSocket();
             loadPublicRooms();
+            loadFriends();
+            refreshUnreadCounts();
+            if (unreadPollInterval) clearInterval(unreadPollInterval);
+            unreadPollInterval = setInterval(refreshUnreadCounts, 5000);
         }
     };
+
+    async function refreshUnreadCounts() {
+        if (!token) return;
+        const response = await fetch("/api/messages/unread-count", { headers: authHeaders() });
+        if (!response.ok) return;
+        const data = await response.json();
+        document.getElementById("unread-private").textContent = data.privateMessages ?? 0;
+        document.getElementById("unread-room").textContent = data.roomMessages ?? 0;
+    }
+
+    async function loadFriends() {
+        if (!token) return;
+        const response = await fetch("/api/friends", { headers: authHeaders() });
+        if (!response.ok) return;
+        const friends = await response.json();
+        const container = document.getElementById("friends-list");
+        container.innerHTML = "";
+        friends.forEach(friend => {
+            const div = document.createElement("div");
+            div.textContent = `${friend.username} (${friend.presenceStatus})`;
+            container.appendChild(div);
+        });
+    }
+
+    async function loadRoomUsers() {
+        if (!token || currentRoom === "public" || currentRoom.startsWith("private-")) {
+            document.getElementById("room-users-list").innerHTML = "";
+            return;
+        }
+        const room = latestRooms.find(r => normalizeRoomName(r) === currentRoom);
+        if (!room?.id) return;
+        const response = await fetch(`/api/rooms/${room.id}/users`, { headers: authHeaders() });
+        if (!response.ok) return;
+        const users = await response.json();
+        const container = document.getElementById("room-users-list");
+        container.innerHTML = "";
+        users.forEach(user => {
+            const row = document.createElement("div");
+            row.className = "room-user";
+            const role = user.owner ? "OWNER" : (user.admin ? "ADMIN" : "MEMBER");
+            row.innerHTML = `<span>${user.username} (${user.presenceStatus}, ${role})</span>`;
+            const btn = document.createElement("button");
+            btn.textContent = "Invite";
+            btn.onclick = () => {
+                document.getElementById("friend-username").value = user.username;
+            };
+            row.appendChild(btn);
+            container.appendChild(row);
+        });
+    }
+
+    async function markPrivateRead(privateUsername) {
+        if (!token || !privateUsername) return;
+        await fetch(`/api/messages/private/${privateUsername}/read`, {
+            method: "POST",
+            headers: authHeaders()
+        });
+    }
+
+    async function markRoomRead(roomName) {
+        if (!token || !roomName) return;
+        const room = latestRooms.find(r => normalizeRoomName(r) === roomName);
+        if (!room?.id) return;
+        await fetch(`/api/messages/room/${room.id}/read`, {
+            method: "POST",
+            headers: authHeaders()
+        });
+        refreshUnreadCounts();
+    }
 </script>
 
 </body>
