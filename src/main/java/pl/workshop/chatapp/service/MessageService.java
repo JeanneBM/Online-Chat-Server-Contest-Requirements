@@ -31,6 +31,10 @@ public class MessageService {
 
     public ChatMessage sendRoomMessage(String roomId, ChatMessage chatMessage, SimpMessageHeaderAccessor headerAccessor) {
         String senderEmail = extractAuthenticatedEmail(headerAccessor);
+        return sendRoomMessage(roomId, chatMessage, senderEmail);
+    }
+
+    public ChatMessage sendRoomMessage(String roomId, ChatMessage chatMessage, String senderEmail) {
         User sender = findUserByEmail(senderEmail);
         Room room = findRoomByKey(roomId);
         Long parsedRoomId = room.getId();
@@ -55,7 +59,7 @@ public class MessageService {
 
         ChatMessage response = new ChatMessage();
         response.setType(MessageType.CHAT);
-        response.setRoomId(roomId);
+        response.setRoomId(String.valueOf(parsedRoomId));
         response.setSender(resolveBusinessUsername(sender));
         response.setContent(saved.getContent());
         response.setAttachmentUrl(saved.getAttachmentUrl());

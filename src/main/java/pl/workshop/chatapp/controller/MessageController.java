@@ -1,7 +1,9 @@
 package pl.workshop.chatapp.controller;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
+import pl.workshop.chatapp.model.ChatMessage;
 import pl.workshop.chatapp.model.Message;
 import pl.workshop.chatapp.service.MessageService;
 import pl.workshop.chatapp.service.RoomService;
@@ -16,16 +18,30 @@ public class MessageController {
 
     private final MessageService messageService;
     private final RoomService roomService;
+    private final SimpMessagingTemplate messagingTemplate;
 
-    public MessageController(MessageService messageService, RoomService roomService) {
+    public MessageController(MessageService messageService,
+                             RoomService roomService,
+                             SimpMessagingTemplate messagingTemplate) {
         this.messageService = messageService;
         this.roomService = roomService;
+        this.messagingTemplate = messagingTemplate;
     }
 
     @GetMapping("/room/{roomId}")
     public ResponseEntity<List<Message>> getRoomMessages(@PathVariable Long roomId, Principal principal) {
         String email = extractAuthenticatedEmail(principal);
         return ResponseEntity.ok(messageService.getRoomMessages(roomId, email));
+    }
+
+    @PostMapping("/room/{roomKey}")
+    public ResponseEntity<ChatMessage> sendRoomMessage(@PathVariable String roomKey,
+                                                       @RequestBody ChatMessage chatMessage,
+                                                       Principal principal) {
+        String email = extractAuthenticatedEmail(principal);
+        ChatMessage response = messageService.sendRoomMessage(roomKey, chatMessage, email);
+        messagingTemplate.convertAndSend("/topic/room/" + response.getRoomId(), response);
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/room/{roomId}/read")

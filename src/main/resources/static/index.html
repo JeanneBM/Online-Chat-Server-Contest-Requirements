@@ -379,7 +379,7 @@
         if (!roomName.startsWith("private-")) {
             currentPrivatePeer = null;
         }
-        currentRoomId = roomId ?? resolveRoomId(roomName) ?? roomName;
+        currentRoomId = roomId ?? resolveRoomId(roomName) ?? null;
         document.getElementById("active-room-label").textContent = `Active room: ${roomName}`;
         setInfo(MESSAGES.activeRoom(roomName));
 
@@ -387,6 +387,11 @@
             pendingRoomToJoin = roomName;
             connectWebSocket();
             return;
+        }
+
+        if (!currentRoomId) {
+            await loadPublicRooms();
+            currentRoomId = resolveRoomId(roomName) ?? null;
         }
 
         if (!currentRoomId) {
@@ -429,7 +434,7 @@
         refreshUnreadCounts();
     }
 
-    function sendMessage() {
+    async function sendMessage() {
         const input = document.getElementById("message-input");
         const content = input.value.trim();
 
@@ -443,6 +448,12 @@
         }
 
         if (!currentRoomId) {
+            await loadPublicRooms();
+            currentRoomId = resolveRoomId(currentRoom) ?? null;
+        }
+
+        const roomKey = currentRoomId ?? currentRoom;
+        if (!roomKey) {
             alert("Room is not ready yet. Please refresh room list and try again.");
             return;
         }
@@ -458,20 +469,34 @@
             );
             setTimeout(() => loadPrivateMessages(privateUsername), 250);
         } else {
-            stompClient.send(
-                "/app/chat/send/" + currentRoomId,
-                {},
-                JSON.stringify({
+            await ensureRoomMembership(currentRoom, currentRoomId);
+            const response = await fetch(`/api/messages/room/${encodeURIComponent(roomKey)}`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...authHeaders()
+                },
+                body: JSON.stringify({
                     content: content
                 })
-            );
-            setTimeout(() => refreshActiveRoomMessages(), 250);
+            });
+
+            if (!response.ok) {
+                alert(translateServerMessage(await response.text()));
+                return;
+            }
+
+            const savedMessage = await response.json();
+            if (savedMessage?.roomId) {
+                currentRoomId = savedMessage.roomId;
+            }
+            await refreshActiveRoomMessages();
         }
 
         input.value = "";
     }
 
-    function refreshActiveRoomMessages() {
+    async function refreshActiveRoomMessages() {
         if (currentRoom.startsWith("private-")) {
             return;
         }
@@ -481,7 +506,7 @@
             return;
         }
 
-        loadRoomMessages(resolvedRoomId);
+        await loadRoomMessages(resolvedRoomId);
     }
 
     function deleteMessage(messageId) {
@@ -557,8 +582,17 @@
 
         const rooms = await response.json();
         latestRooms = rooms;
+        if (!currentRoom && rooms.length) {
+            currentRoom = normalizeRoomName(rooms[0]);
+        }
+        if (currentRoom === "public" && !resolveRoomId("public")) {
+            const publicRoom = rooms.find(room => normalizeRoomName(room) === "public");
+            if (publicRoom) {
+                currentRoomId = publicRoom.id;
+            }
+        }
         const resolvedCurrentRoomId = resolveRoomId(currentRoom);
-        currentRoomId = resolvedCurrentRoomId ?? currentRoom;
+        currentRoomId = resolvedCurrentRoomId ?? currentRoomId;
         setInfo(MESSAGES.roomListLoaded(rooms.length));
 
         if (stompClient && stompClient.connected && resolvedCurrentRoomId
