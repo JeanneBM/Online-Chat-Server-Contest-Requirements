@@ -29,6 +29,14 @@ public class RoomService {
     private final FileService fileService;
     private final RoomBanRepository roomBanRepository;
 
+    public void ensurePublicRoom(String email) {
+        if (roomRepository.findByName("public").isEmpty()) {
+            Room room = new Room();
+            room.setName("public");
+            createRoom(room, email);
+        }
+    }
+
     public Room createRoom(Room roomReq, String ownerEmail) {
         User owner = findUserByEmail(ownerEmail);
 

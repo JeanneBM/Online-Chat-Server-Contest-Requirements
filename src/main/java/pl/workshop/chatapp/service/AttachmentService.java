@@ -9,6 +9,9 @@ import pl.workshop.chatapp.model.Attachment;
 import pl.workshop.chatapp.model.User;
 import pl.workshop.chatapp.repository.AttachmentRepository;
 import pl.workshop.chatapp.repository.UserRepository;
+import pl.workshop.chatapp.repository.MessageRepository;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -27,9 +30,29 @@ public class AttachmentService {
 
     private final AttachmentRepository attachmentRepository;
     private final UserRepository userRepository;
+    private final MessageRepository messageRepository;
 
     @Value("${app.upload.dir:./uploads}")
     private String uploadDir;
+
+    @Transactional(readOnly = true)
+    public Resource download(String filename, String email) throws IOException {
+        Attachment attachment = attachmentRepository.findByStoredFilename(filename).orElseThrow();
+        User user = userRepository.findByEmail(email).orElseThrow();
+        boolean allowed = attachment.getUploadedBy().getId().equals(user.getId())
+                || messageRepository.findByAttachmentUrl(attachment.getUrl()).stream().anyMatch(message -> {
+                    if (message.getSender().getId().equals(user.getId())) return true;
+                    if (message.getReceiver() != null && message.getReceiver().getId().equals(user.getId())) return true;
+                    var room = message.getRoom();
+                    return room != null && !room.getBannedUsers().contains(user)
+                            && (room.getOwner().equals(user) || room.getMembers().contains(user) || room.getAdmins().contains(user));
+                });
+        if (!allowed) throw new SecurityException("You do not have access to this file");
+        Path root = Paths.get(uploadDir).toAbsolutePath().normalize();
+        Path path = root.resolve(attachment.getStoredFilename()).normalize();
+        if (!path.startsWith(root) || !Files.isRegularFile(path)) throw new java.util.NoSuchElementException();
+        return new UrlResource(path.toUri());
+    }
 
     public Map<String, Object> upload(MultipartFile file, String email) throws IOException {
         if (file == null || file.isEmpty()) {

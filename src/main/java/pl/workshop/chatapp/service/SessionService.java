@@ -23,8 +23,10 @@ public class SessionService {
     private final ActiveSessionRepository sessionRepo;
     private final UserRepository userRepo;
     private final ApplicationEventPublisher eventPublisher;
+    private final RoomService roomService;
 
     public ActiveSession createLoginSession(String email, String ip, String userAgent) {
+        roomService.ensurePublicRoom(email);
         User user = userRepo.findByEmail(email).orElseThrow();
 
         ActiveSession session = new ActiveSession();

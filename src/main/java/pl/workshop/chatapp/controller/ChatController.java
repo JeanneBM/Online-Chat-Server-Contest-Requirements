@@ -13,6 +13,7 @@ import pl.workshop.chatapp.model.User;
 import pl.workshop.chatapp.repository.UserRepository;
 import pl.workshop.chatapp.service.FriendService;
 import pl.workshop.chatapp.service.MessageService;
+import pl.workshop.chatapp.service.RoomService;
 
 import java.time.LocalDateTime;
 
@@ -23,15 +24,17 @@ public class ChatController {
     private final FriendService friendService;
     private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final RoomService roomService;
 
     public ChatController(MessageService messageService,
                           FriendService friendService,
                           UserRepository userRepository,
-                          SimpMessagingTemplate messagingTemplate) {
+                          SimpMessagingTemplate messagingTemplate, RoomService roomService) {
         this.messageService = messageService;
         this.friendService = friendService;
         this.userRepository = userRepository;
         this.messagingTemplate = messagingTemplate;
+        this.roomService = roomService;
     }
 
     @MessageMapping("/chat/send/{roomId}")
@@ -77,13 +80,14 @@ public class ChatController {
     }
 
     @MessageMapping("/chat.deleteMessage/{roomId}")
-    @SendTo("/topic/{roomId}")
+    @SendTo("/topic/room/{roomId}")
     public ChatMessage deleteMessage(@DestinationVariable String roomId,
                                      @Payload ChatMessage chatMessage,
                                      SimpMessageHeaderAccessor headerAccessor) {
         String senderEmail = extractAuthenticatedEmail(headerAccessor);
         User sender = userRepository.findByEmail(senderEmail).orElseThrow();
 
+        roomService.deleteMessage(Long.parseLong(roomId), chatMessage.getId(), senderEmail);
         chatMessage.setType(MessageType.DELETE);
         chatMessage.setRoomId(roomId);
         chatMessage.setSender(resolveBusinessUsername(sender));

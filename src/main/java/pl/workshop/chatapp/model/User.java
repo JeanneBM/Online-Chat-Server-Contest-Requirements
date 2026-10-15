@@ -1,6 +1,7 @@
 package pl.workshop.chatapp.model;
 
 import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.*;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -30,6 +31,7 @@ public class User implements UserDetails {
     private String email;
 
     @Column(nullable = false)
+    @JsonIgnore
     private String password;
 
     private LocalDateTime createdAt = LocalDateTime.now();
@@ -43,6 +45,7 @@ public class User implements UserDetails {
     private LocalDateTime lastActivity = LocalDateTime.now();
 
     @ManyToMany
+    @JsonIgnore
     @JoinTable(
             name = "user_friends",
             joinColumns = @JoinColumn(name = "user_id"),
@@ -51,21 +54,27 @@ public class User implements UserDetails {
     private Set<User> friends = new HashSet<>();
 
     @OneToMany(mappedBy = "banner", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore
     private Set<UserBan> bans = new HashSet<>();
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore
     private Set<UserSession> sessions = new HashSet<>();
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore
     private Set<ActiveSession> activeSessions = new HashSet<>();
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore
     private Set<PasswordResetToken> resetTokens = new HashSet<>();
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore
     private Set<RoomMembership> roomMemberships = new HashSet<>();
 
     @OneToMany(mappedBy = "uploadedBy", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore
     private Set<Attachment> uploadedAttachments = new HashSet<>();
 
     public boolean isFriend(User other) {
@@ -83,7 +92,7 @@ public class User implements UserDetails {
 
     @Override
     public String getUsername() {
-        return email;
+        return username;
     }
 
     @Override

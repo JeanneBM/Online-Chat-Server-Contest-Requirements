@@ -77,9 +77,11 @@ public class FriendController {
     }
 
     @GetMapping("/requests/pending")
-    public List<FriendRequest> getPendingRequests(Principal principal) {
+    public List<SentFriendRequestDto> getPendingRequests(Principal principal) {
         User user = userRepository.findByEmail(principal.getName()).orElseThrow();
-        return friendService.getPendingRequests(user.getId());
+        return friendService.getPendingRequests(user.getId()).stream()
+                .map(request -> new SentFriendRequestDto(request.getId(), request.getSender().getUsername()))
+                .toList();
     }
 
     @GetMapping("/requests/sent")

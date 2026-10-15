@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface MessageRepository extends JpaRepository<Message, Long> {
+    List<Message> findByAttachmentUrl(String attachmentUrl);
     List<Message> findByRoomOrderByCreatedAtAsc(Room room);
     List<Message> findBySenderAndReceiverOrderByCreatedAtAsc(User sender, User receiver);
     List<Message> findByReceiverAndSenderOrderByCreatedAtAsc(User receiver, User sender);

@@ -37,9 +37,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers("/ws-chat/**", "/ws-chat", "/ws/**", "/ws", "/sockjs-node/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/", "/index.html", "/**/*.js", "/**/*.css", "/**/*.png", "/**/*.jpg", "/**/*.jpeg").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/", "/index.html", "/favicon.ico").permitAll()
                         .anyRequest().authenticated()
                 )
+                .exceptionHandling(errors -> errors.authenticationEntryPoint((request, response, exception) ->
+                        response.sendError(401, "Please sign in again")))
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
