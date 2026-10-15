@@ -431,6 +431,9 @@
             link.textContent = "Download file";
             link.onclick = async event => {
                 event.preventDefault();
+                if (!/^\/uploads\/[^/?#]+$/.test(msg.attachmentUrl)) {
+                    throw new Error("Invalid attachment link.");
+                }
                 const response = await apiFetch(msg.attachmentUrl, { headers: authHeaders() });
                 const url = URL.createObjectURL(await response.blob());
                 const download = document.createElement("a");
@@ -572,7 +575,7 @@
         const message = await response.json();
         if ((message.roomId && String(message.roomId) === String(currentRoomId)) ||
             (!message.roomId && message.receiver === currentPrivatePeer)) renderMessageEntry(message);
-        input.value = "";
+        if (input.value.trim() === content) input.value = "";
     }
 
     async function refreshActiveRoomMessages() {
@@ -844,7 +847,7 @@
             loadPublicRooms();
             loadFriends();
             loadSentFriendRequests();
-        loadPendingFriendRequests();
+            loadPendingFriendRequests();
             refreshUnreadCounts();
             if (unreadPollInterval) clearInterval(unreadPollInterval);
             unreadPollInterval = setInterval(() => { refreshUnreadCounts(); loadFriends(); loadPendingFriendRequests(); loadSentFriendRequests(); }, 5000);
@@ -911,7 +914,9 @@
             const row = document.createElement("div");
             row.className = "room-user";
             const role = user.owner ? "OWNER" : (user.admin ? "ADMIN" : "MEMBER");
-            row.innerHTML = `<span>${user.username} (${user.presenceStatus}, ${role})</span>`;
+            const label = document.createElement("span");
+            label.textContent = `${user.username} (${user.presenceStatus}, ${role})`;
+            row.appendChild(label);
             const btn = document.createElement("button");
             btn.textContent = "Invite";
             btn.onclick = () => {

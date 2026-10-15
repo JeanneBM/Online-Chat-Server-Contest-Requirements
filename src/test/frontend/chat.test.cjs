@@ -123,3 +123,12 @@ test('expired sessions restore the sign-in panel', async () => {
     assert.equal(ui.storage.has('token'), false);
     assert.equal(ui.elements.get('auth-panel').style.display, 'flex');
 });
+
+test('attachment downloads never send the token to an external URL', async () => {
+    const calls = [];
+    const ui = app(async url => { calls.push(url); return ok({}); });
+    ui.run('renderMessageEntry({ id: 2, sender: "bob", attachmentUrl: "https://example.com/collect" })');
+    const link = ui.elements.get('messages').children[0].children[3];
+    await assert.rejects(link.onclick({ preventDefault() {} }), /Invalid attachment/);
+    assert.equal(calls.length, 0);
+});
