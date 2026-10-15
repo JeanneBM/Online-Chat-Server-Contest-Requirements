@@ -95,6 +95,7 @@ public class MessageService {
         response.setId(saved.getId());
         response.setType(MessageType.CHAT);
         response.setSender(resolveBusinessUsername(sender));
+        response.setReceiver(receiver.getUsername());
         response.setContent(saved.getContent());
         response.setAttachmentUrl(saved.getAttachmentUrl());
         response.setReplyToId(saved.getReplyToId());

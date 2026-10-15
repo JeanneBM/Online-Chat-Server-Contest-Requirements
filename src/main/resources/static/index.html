@@ -27,7 +27,8 @@
 </head>
 <body>
 
-<div class="header">Online Chat - FINAL VERSION</div>
+<div class="header">Online Chat</div>
+<div id="status" role="status" style="padding:8px;background:#eef4ff;min-height:32px;"></div>
 
 <div class="main">
     <div class="sidebar">
@@ -62,6 +63,8 @@
             <div id="sent-friend-requests-list" style="margin-top:6px;font-size:0.9em;color:#444;">No sent invitations.</div>
         </div>
         <div id="friends-list"></div>
+        <h4>Received invitations</h4>
+        <div id="pending-friend-requests-list"></div>
 
         <hr>
         <h4>Direct Chat 1:1</h4>
@@ -87,8 +90,8 @@
 
 <div id="auth-panel" style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);color:white;display:flex;align-items:center;justify-content:center;flex-direction:column;z-index:1000;">
     <h2>Online Chat</h2>
-    <input id="username" placeholder="Username" value="testuser" style="margin:8px;padding:12px;width:300px;"><br>
-    <input id="password" type="password" placeholder="Password" value="test123" style="margin:8px;padding:12px;width:300px;"><br>
+    <input id="username" placeholder="Username or email" style="margin:8px;padding:12px;width:300px;"><br>
+    <input id="password" type="password" placeholder="Password" style="margin:8px;padding:12px;width:300px;"><br>
     <button onclick="login()" style="margin:8px;padding:12px 30px;width:300px;">Sign In</button>
     <button onclick="register()" style="margin:8px;padding:12px 30px;width:300px;background:#28a745;">Register</button>
     <div id="user-info" style="margin-top:12px;font-size:14px;opacity:0.9;"></div>
@@ -154,6 +157,7 @@
     }
 
     function setInfo(message) {
+        document.getElementById("status").textContent = message || "";
         document.getElementById("user-info").textContent = message || "";
     }
 
@@ -198,7 +202,7 @@
             return;
         }
 
-        const response = await fetch("/api/auth/login", {
+        const response = await apiFetch("/api/auth/login", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
@@ -231,8 +235,9 @@
         refreshUnreadCounts();
         loadFriends();
         loadSentFriendRequests();
+        loadPendingFriendRequests();
         if (unreadPollInterval) clearInterval(unreadPollInterval);
-        unreadPollInterval = setInterval(refreshUnreadCounts, 5000);
+        unreadPollInterval = setInterval(() => { refreshUnreadCounts(); loadFriends(); loadPendingFriendRequests(); loadSentFriendRequests(); }, 5000);
     }
 
     async function logout() {
@@ -242,7 +247,7 @@
         }
 
         try {
-            await fetch("/api/auth/logout", {
+            await apiFetch("/api/auth/logout", {
                 method: "POST",
                 headers: authHeaders()
             });
@@ -283,7 +288,7 @@
         }
 
         try {
-            const response = await fetch("/api/user/delete-account", {
+            const response = await apiFetch("/api/user/delete-account", {
                 method: "DELETE",
                 headers: authHeaders()
             });
@@ -310,13 +315,13 @@
             return;
         }
 
-        const response = await fetch("/api/auth/register", {
+        const response = await apiFetch("/api/auth/register", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                email: usernameValue + "@local.test",
+                email: usernameValue.includes("@") ? usernameValue : usernameValue + "@local.test",
                 username: usernameValue,
                 password: password
             })
@@ -343,8 +348,9 @@
         refreshUnreadCounts();
         loadFriends();
         loadSentFriendRequests();
+        loadPendingFriendRequests();
         if (unreadPollInterval) clearInterval(unreadPollInterval);
-        unreadPollInterval = setInterval(refreshUnreadCounts, 5000);
+        unreadPollInterval = setInterval(() => { refreshUnreadCounts(); loadFriends(); loadPendingFriendRequests(); loadSentFriendRequests(); }, 5000);
     }
 
     function authHeaders() {
@@ -380,6 +386,7 @@
             },
             function (error) {
                 console.error("WebSocket error:", error);
+                setInfo("Live connection failed. Sign in again or check the server logs.");
             }
         );
     }
@@ -404,30 +411,43 @@
             return;
         }
 
-        await fetch(`/api/rooms/${joinRoomId}/join`, {
+        await apiFetch(`/api/rooms/${joinRoomId}/join`, {
             method: "POST",
             headers: authHeaders()
         });
     }
 
     function renderMessageEntry(msg) {
+        if (msg.id && document.getElementById(`message-${msg.id}`)) return;
         const div = document.createElement("div");
-        const senderName = typeof msg.sender === "string"
-            ? msg.sender
-            : (msg.sender?.username || msg.sender?.email || "unknown");
+        div.id = `message-${msg.id}`;
         div.className = "message";
-        div.innerHTML = `<strong>${senderName}:</strong> ${msg.content || ""}`;
-
+        const sender = document.createElement("strong");
+        sender.textContent = `${typeof msg.sender === "string" ? msg.sender : msg.sender?.username || "unknown"}: `;
+        div.append(sender, document.createTextNode(msg.content || ""));
         if (msg.attachmentUrl) {
-            div.innerHTML += `<br><a href="${msg.attachmentUrl}" target="_blank">📎 File</a>`;
+            const link = document.createElement("a");
+            link.href = "#";
+            link.textContent = "Download file";
+            link.onclick = async event => {
+                event.preventDefault();
+                const response = await apiFetch(msg.attachmentUrl, { headers: authHeaders() });
+                const url = URL.createObjectURL(await response.blob());
+                const download = document.createElement("a");
+                download.href = url;
+                download.download = decodeURIComponent(msg.attachmentUrl.split("/").pop());
+                download.click();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            };
+            div.append(document.createElement("br"), link);
         }
-
-        const delBtn = document.createElement("span");
-        delBtn.className = "delete-btn";
-        delBtn.innerHTML = "🗑";
-        delBtn.onclick = () => deleteMessage(msg.id || 0);
-        div.appendChild(delBtn);
-
+        if (msg.roomId) {
+            const delBtn = document.createElement("button");
+            delBtn.className = "delete-btn";
+            delBtn.textContent = "Delete";
+            delBtn.onclick = () => deleteMessage(msg.id, msg.roomId);
+            div.appendChild(delBtn);
+        }
         document.getElementById("messages").appendChild(div);
     }
 
@@ -436,12 +456,13 @@
             return;
         }
 
-        const response = await fetch(`/api/messages/room/${roomId}`, { headers: authHeaders() });
+        const response = await apiFetch(`/api/messages/room/${roomId}`, { headers: authHeaders() });
         if (!response.ok) {
             return;
         }
 
         const messages = await response.json();
+        if (String(currentRoomId) !== String(roomId)) return;
         const box = document.getElementById("messages");
         box.innerHTML = "";
         messages.forEach(renderMessageEntry);
@@ -449,6 +470,18 @@
     }
 
     async function subscribeRoom(roomName, roomId = null) {
+        if (roomName.startsWith("private-")) {
+            if (roomSubscription) roomSubscription.unsubscribe();
+            roomSubscription = null;
+            subscribedRoomId = null;
+            currentRoomId = null;
+            currentRoom = roomName;
+            currentPrivatePeer = roomName.slice("private-".length);
+            document.getElementById("active-room-label").textContent = `Direct chat: ${currentPrivatePeer}`;
+            await loadPrivateMessages(currentPrivatePeer);
+            await markPrivateRead(currentPrivatePeer);
+            return;
+        }
         currentRoom = roomName;
         if (!roomName.startsWith("private-")) {
             currentPrivatePeer = null;
@@ -491,6 +524,11 @@
 
     function onMessageReceived(payload) {
         const msg = JSON.parse(payload.body);
+        if (String(msg.roomId) !== String(currentRoomId)) return;
+        if (msg.type === "DELETE") {
+            document.getElementById(`message-${msg.id}`)?.remove();
+            return;
+        }
         renderMessageEntry(msg);
         document.getElementById("messages").scrollTop = 999999;
         refreshUnreadCounts();
@@ -499,7 +537,7 @@
     function onPrivateMessageReceived(payload) {
         const msg = JSON.parse(payload.body);
 
-        if (currentRoom.startsWith("private-")) {
+        if (currentRoom.startsWith("private-") && (msg.sender === currentPrivatePeer || (msg.sender === username && msg.receiver === currentPrivatePeer))) {
             renderMessageEntry(msg);
             document.getElementById("messages").scrollTop = 999999;
             markPrivateRead(currentPrivatePeer);
@@ -517,47 +555,23 @@
             return;
         }
 
-        if (!stompClient || !stompClient.connected) {
-            alert(MESSAGES.websocketMissing);
-            return;
-        }
-
+        let endpoint;
         if (currentRoom.startsWith("private-")) {
-            const privateUsername = currentPrivatePeer || currentRoom.replace("private-", "");
-            stompClient.send(
-                "/app/chat.sendPrivateMessage/" + privateUsername,
-                {},
-                JSON.stringify({
-                    content: content || null,
-                    attachmentUrl: attachmentUrl
-                })
-            );
-            setTimeout(() => loadPrivateMessages(privateUsername), 250);
+            endpoint = "/api/messages/private/" + encodeURIComponent(currentPrivatePeer);
         } else {
-            if (!currentRoomId) {
-                await loadPublicRooms();
-                currentRoomId = resolveRoomId(currentRoom) ?? null;
-            }
-            if (!currentRoomId) {
-                await subscribeRoom(currentRoom);
-            }
-            if (!currentRoomId) {
-                alert("Room is not ready yet. Please refresh room list and try again.");
-                return;
-            }
-
+            if (!currentRoomId) await subscribeRoom(currentRoom);
+            if (!currentRoomId) throw new Error("Select or create a room first.");
             await ensureRoomMembership(currentRoom, currentRoomId);
-            stompClient.send(
-                "/app/chat/send/" + currentRoomId,
-                {},
-                JSON.stringify({
-                    content: content || null,
-                    attachmentUrl: attachmentUrl
-                })
-            );
-            setTimeout(() => loadRoomMessages(currentRoomId), 250);
+            endpoint = "/api/messages/room/" + currentRoomId;
         }
-
+        const response = await apiFetch(endpoint, {
+            method: "POST",
+            headers: { ...authHeaders(), "Content-Type": "application/json" },
+            body: JSON.stringify({ content: content || null, attachmentUrl })
+        });
+        const message = await response.json();
+        if ((message.roomId && String(message.roomId) === String(currentRoomId)) ||
+            (!message.roomId && message.receiver === currentPrivatePeer)) renderMessageEntry(message);
         input.value = "";
     }
 
@@ -574,18 +588,12 @@
         await loadRoomMessages(resolvedRoomId);
     }
 
-    function deleteMessage(messageId) {
-        if (!stompClient || !stompClient.connected || !currentRoomId) {
-            return;
-        }
-
-        stompClient.send(
-            "/app/chat.deleteMessage/" + currentRoomId,
-            {},
-            JSON.stringify({
-                messageId: messageId
-            })
-        );
+    async function deleteMessage(messageId, roomId) {
+        await apiFetch(`/api/rooms/${roomId}/message/${messageId}`, {
+            method: "DELETE", headers: authHeaders()
+        });
+        document.getElementById(`message-${messageId}`)?.remove();
+        setInfo("Message deleted.");
     }
 
     function normalizeRoomName(room) {
@@ -630,7 +638,7 @@
             return;
         }
 
-        const response = await fetch("/api/rooms/public", {
+        const response = await apiFetch("/api/rooms/public", {
             headers: authHeaders()
         });
 
@@ -659,11 +667,6 @@
         const resolvedCurrentRoomId = resolveRoomId(currentRoom);
         currentRoomId = resolvedCurrentRoomId ?? currentRoomId;
         setInfo(MESSAGES.roomListLoaded(rooms.length));
-
-        if (stompClient && stompClient.connected && resolvedCurrentRoomId
-            && (!roomSubscription || String(resolvedCurrentRoomId) !== String(subscribedRoomId))) {
-            await subscribeRoom(currentRoom, resolvedCurrentRoomId);
-        }
 
         const list = document.getElementById("room-list");
         list.innerHTML = "";
@@ -703,7 +706,7 @@
             return;
         }
 
-        const response = await fetch("/api/rooms", {
+        const response = await apiFetch("/api/rooms", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -742,7 +745,7 @@
             return;
         }
 
-        const response = await fetch("/api/friends/request", {
+        const response = await apiFetch("/api/friends/request", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -761,9 +764,10 @@
         alert(MESSAGES.invitationSent);
         await loadFriends();
         await loadSentFriendRequests();
+        loadPendingFriendRequests();
     }
 
-    function startPrivateChat() {
+    async function startPrivateChat() {
         const privateUsername = document.getElementById("private-username").value.trim();
 
         if (!privateUsername) {
@@ -772,17 +776,16 @@
         }
 
         currentPrivatePeer = privateUsername;
-        subscribeRoom("private-" + privateUsername, "private-" + privateUsername);
-        loadPrivateMessages(privateUsername);
-        markPrivateRead(privateUsername);
+        await subscribeRoom("private-" + privateUsername);
         refreshUnreadCounts();
     }
 
     async function loadPrivateMessages(privateUsername) {
         if (!token || !privateUsername) return;
-        const response = await fetch(`/api/messages/private/${privateUsername}`, { headers: authHeaders() });
+        const response = await apiFetch(`/api/messages/private/${encodeURIComponent(privateUsername)}`, { headers: authHeaders() });
         if (!response.ok) return;
         const messages = await response.json();
+        if (currentPrivatePeer !== privateUsername || !currentRoom.startsWith("private-")) return;
         const box = document.getElementById("messages");
         box.innerHTML = "";
         messages.forEach(renderMessageEntry);
@@ -812,7 +815,7 @@
             const formData = new FormData();
             formData.append("file", file);
 
-            const response = await fetch("/api/attachments", {
+            const response = await apiFetch("/api/attachments", {
                 method: "POST",
                 headers: authHeaders(),
                 body: formData
@@ -841,15 +844,16 @@
             loadPublicRooms();
             loadFriends();
             loadSentFriendRequests();
+        loadPendingFriendRequests();
             refreshUnreadCounts();
             if (unreadPollInterval) clearInterval(unreadPollInterval);
-            unreadPollInterval = setInterval(refreshUnreadCounts, 5000);
+            unreadPollInterval = setInterval(() => { refreshUnreadCounts(); loadFriends(); loadPendingFriendRequests(); loadSentFriendRequests(); }, 5000);
         }
     };
 
     async function refreshUnreadCounts() {
         if (!token) return;
-        const response = await fetch("/api/messages/unread-count", { headers: authHeaders() });
+        const response = await apiFetch("/api/messages/unread-count", { headers: authHeaders() });
         if (!response.ok) return;
         const data = await response.json();
         document.getElementById("unread-private").textContent = data.privateMessages ?? 0;
@@ -858,7 +862,7 @@
 
     async function loadFriends() {
         if (!token) return;
-        const response = await fetch("/api/friends", { headers: authHeaders() });
+        const response = await apiFetch("/api/friends", { headers: authHeaders() });
         if (!response.ok) return;
         const friends = await response.json();
         const container = document.getElementById("friends-list");
@@ -872,7 +876,7 @@
 
     async function loadSentFriendRequests() {
         if (!token) return;
-        const response = await fetch("/api/friends/requests/sent", { headers: authHeaders() });
+        const response = await apiFetch("/api/friends/requests/sent", { headers: authHeaders() });
         if (!response.ok) return;
         const invitations = await response.json();
         const container = document.getElementById("sent-friend-requests-list");
@@ -892,13 +896,13 @@
     }
 
     async function loadRoomUsers() {
-        if (!token || currentRoom === "public" || currentRoom.startsWith("private-")) {
+        if (!token || currentRoom.startsWith("private-")) {
             document.getElementById("room-users-list").innerHTML = "";
             return;
         }
         const room = latestRooms.find(r => normalizeRoomName(r) === currentRoom);
         if (!room?.id) return;
-        const response = await fetch(`/api/rooms/${room.id}/users`, { headers: authHeaders() });
+        const response = await apiFetch(`/api/rooms/${room.id}/users`, { headers: authHeaders() });
         if (!response.ok) return;
         const users = await response.json();
         const container = document.getElementById("room-users-list");
@@ -912,6 +916,7 @@
             btn.textContent = "Invite";
             btn.onclick = () => {
                 document.getElementById("friend-username").value = user.username;
+                return sendFriendRequest();
             };
             row.appendChild(btn);
             container.appendChild(row);
@@ -920,7 +925,7 @@
 
     async function markPrivateRead(privateUsername) {
         if (!token || !privateUsername) return;
-        await fetch(`/api/messages/private/${privateUsername}/read`, {
+        await apiFetch(`/api/messages/private/${encodeURIComponent(privateUsername)}/read`, {
             method: "POST",
             headers: authHeaders()
         });
@@ -930,12 +935,68 @@
         if (!token || !roomName) return;
         const room = latestRooms.find(r => normalizeRoomName(r) === roomName);
         if (!room?.id) return;
-        await fetch(`/api/messages/room/${room.id}/read`, {
+        await apiFetch(`/api/messages/room/${room.id}/read`, {
             method: "POST",
             headers: authHeaders()
         });
         refreshUnreadCounts();
     }
+    async function loadPendingFriendRequests() {
+        if (!token) return;
+        const response = await apiFetch("/api/friends/requests/pending", { headers: authHeaders() });
+        const requests = await response.json();
+        const container = document.getElementById("pending-friend-requests-list");
+        container.replaceChildren();
+        if (!requests.length) container.textContent = "No received invitations.";
+        requests.forEach(request => {
+            const row = document.createElement("div");
+            row.append(document.createTextNode(request.username + " "));
+            ["accept", "reject"].forEach(action => {
+                const button = document.createElement("button");
+                button.textContent = action === "accept" ? "Accept" : "Reject";
+                button.onclick = async () => {
+                    await apiFetch(`/api/friends/request/${request.id}/${action}`, { method: "POST", headers: authHeaders() });
+                    await loadPendingFriendRequests();
+                    await loadFriends();
+                    setInfo(action === "accept" ? "Invitation accepted." : "Invitation rejected.");
+                };
+                row.append(button);
+            });
+            container.append(row);
+        });
+    }
+
+    async function apiFetch(url, options = {}) {
+        let response;
+        try {
+            response = await fetch(url, options);
+        } catch (error) {
+            throw new Error("Cannot reach the server. Check that the application is running.");
+        }
+        if (!response.ok) {
+            const message = translateServerMessage(await response.text());
+            if (response.status === 401) {
+                token = null;
+                username = null;
+                localStorage.removeItem("token");
+                localStorage.removeItem("username");
+                if (unreadPollInterval) clearInterval(unreadPollInterval);
+                if (presencePingInterval) clearInterval(presencePingInterval);
+                if (stompClient?.connected) stompClient.disconnect();
+                document.getElementById("auth-panel").style.display = "flex";
+            }
+            throw new Error(message || `Request failed (${response.status}).`);
+        }
+        return response;
+    }
+
+    window.addEventListener("unhandledrejection", event => {
+        setInfo(event.reason?.message || "The action failed. Please try again.");
+        event.preventDefault();
+    });
+    document.getElementById("message-input").addEventListener("keydown", event => {
+        if (event.key === "Enter" && !event.isComposing) sendMessage();
+    });
 </script>
 
 </body>

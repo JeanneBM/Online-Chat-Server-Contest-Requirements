@@ -10,6 +10,7 @@ public class ChatMessage {
     private MessageType type = MessageType.CHAT;
     private String content;
     private String sender;
+    private String receiver;
     private String attachmentUrl;
     private LocalDateTime timestamp = LocalDateTime.now();
     private String roomId;

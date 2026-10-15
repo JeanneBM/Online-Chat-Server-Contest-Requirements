@@ -1,6 +1,9 @@
 package pl.workshop.chatapp.controller;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import pl.workshop.chatapp.model.ChatMessage;
+import pl.workshop.chatapp.model.MessageType;
 import org.springframework.web.bind.annotation.*;
 import pl.workshop.chatapp.controller.dto.RoomSummaryDto;
 import pl.workshop.chatapp.controller.dto.RoomUserDto;
@@ -26,20 +29,22 @@ public class RoomController {
     private final UserRepository userRepository;
     private final RoomService roomService;
     private final InvitationService invitationService;
+    private final SimpMessagingTemplate messagingTemplate;
 
     public RoomController(RoomRepository roomRepository,
                           UserRepository userRepository,
                           RoomService roomService,
-                          InvitationService invitationService) {
+                          InvitationService invitationService, SimpMessagingTemplate messagingTemplate) {
         this.roomRepository = roomRepository;
         this.userRepository = userRepository;
         this.roomService = roomService;
         this.invitationService = invitationService;
+        this.messagingTemplate = messagingTemplate;
     }
 
     @PostMapping
-    public ResponseEntity<Room> createRoom(@RequestBody Room roomReq, Principal principal) {
-        return ResponseEntity.ok(roomService.createRoom(roomReq, principal.getName()));
+    public ResponseEntity<RoomSummaryDto> createRoom(@RequestBody Room roomReq, Principal principal) {
+        return ResponseEntity.ok(RoomSummaryDto.from(roomService.createRoom(roomReq, principal.getName())));
     }
 
     @GetMapping("/my")
@@ -65,7 +70,7 @@ public class RoomController {
 
     @PostMapping("/{roomId}/join")
     public ResponseEntity<?> joinPublicRoom(@PathVariable Long roomId, Principal principal) {
-        return ResponseEntity.ok(roomService.joinPublicRoom(roomId, principal.getName()));
+        return ResponseEntity.ok(RoomSummaryDto.from(roomService.joinPublicRoom(roomId, principal.getName())));
     }
 
     @PostMapping("/{roomId}/leave")
@@ -78,6 +83,11 @@ public class RoomController {
                                            @PathVariable Long messageId,
                                            Principal principal) {
         roomService.deleteMessage(roomId, messageId, principal.getName());
+        ChatMessage event = new ChatMessage();
+        event.setType(MessageType.DELETE);
+        event.setId(messageId);
+        event.setRoomId(roomId.toString());
+        messagingTemplate.convertAndSend("/topic/room/" + roomId, event);
         return ResponseEntity.ok("Wiadomość usunięta");
     }
 
