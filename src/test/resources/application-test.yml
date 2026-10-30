@@ -13,3 +13,7 @@ spring:
 app:
   upload:
     dir: ./target/test-uploads
+
+# Ephemeral, per-test-context signing material; never used by the runtime profile.
+jwt:
+  secret: ${random.uuid}${random.uuid}
