@@ -4,7 +4,7 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/chatdb}
     username: ${SPRING_DATASOURCE_USERNAME:chatuser}
-    password: ${SPRING_DATASOURCE_PASSWORD:chatpass123}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -27,5 +27,5 @@ app:
     dir: /app/uploads
 
 jwt:
-  secret: ${JWT_SECRET:super-secret-key-change-in-production-2026}
+  secret: ${JWT_SECRET}
   expiration: ${JWT_EXPIRATION:86400000}

@@ -25,7 +25,7 @@ The application implements a classic internet messenger scenario, including:
 ## Quick start
 
 1. Clone the repository.
-2. Run the application from the repository root:
+2. Copy `.env.example` to `.env` locally and set NEW, unique `POSTGRES_PASSWORD` and `JWT_SECRET` values (JWT secret: at least 32 random bytes). Never commit `.env`. Then run the application from the repository root:
 
 ```bash
 docker compose up --build
@@ -67,3 +67,7 @@ They cover registration/login identity, room history and deletion, invitations, 
 - `docs/requirements-gap-analysis.md` – requirements coverage map,
 - `docs/non-functional-evidence.md` – evidence of meeting non-functional requirements,
 - `docs/perf/README.md` – performance testing information.
+
+## Previously committed local credentials
+
+Committed `.env` values were removed and shared runtime password/JWT defaults were removed. Treat previously published values as compromised if used anywhere; rotate them. For an existing PostgreSQL volume, changing `.env` alone does not change the database password: rotate it in the database and update clients together. Rotating the JWT signing secret invalidates existing sessions. Earlier Git commits may still contain the old values; history cleanup is separate.

@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-chatdb}
       POSTGRES_USER: ${POSTGRES_USER:-chatuser}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chatpass123}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a NEW local POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
@@ -27,9 +27,9 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-chatdb}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-chatuser}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-chatpass123}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set a NEW local POSTGRES_PASSWORD}
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
-      JWT_SECRET: ${JWT_SECRET:-super-secret-key-change-in-production-2026}
+      JWT_SECRET: ${JWT_SECRET:?Set a NEW local JWT_SECRET}
       SERVER_PORT: 8080
     ports:
       - "8080:8080"
